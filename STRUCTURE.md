@@ -197,7 +197,7 @@ chat/
 
 ---
 
-## 🌐 API Endpoints (17 total)
+## 🌐 API Endpoints (22 total)
 
 Base URL: `http://localhost:8080`
 
@@ -216,11 +216,16 @@ Base URL: `http://localhost:8080`
 ### Groups — *100 req/min*
 | Method | Path | Description |
 |---|---|---|
+| GET | `/groups` | List all groups |
+| GET | `/groups/:id` | Get group by ID |
 | POST | `/groups` | Create group (body: `name`) |
+| PUT | `/groups/:id` | Update group name (body: `name`, `requester_id`; owner only) |
 | DELETE | `/groups/:id` | Soft-delete group + its members (body: `requester_id`; owner only) |
 | POST | `/groups/:id/members` | Add member (body: `requester_id`, `user_id`, `role` optional; admin/owner only) |
+| PATCH | `/groups/:id/members/:user_id` | Update member role (body: `role`, `requester_id`; admin/owner only, cannot change owner) |
 | DELETE | `/groups/:id/members/:user_id` | Remove member (body: `requester_id`; admin/owner only, cannot remove owner) |
 | GET | `/groups/:id/members` | List group members |
+| POST | `/groups/:id/leave` | Leave group (body: `user_id`; owner cannot leave) |
 
 ### Messages — *100 req/min*
 | Method | Path | Description |
@@ -263,7 +268,12 @@ Since there is **no JWT authentication** yet, authorization uses a `requester_id
 | Assign owner/admin role | Owner only | `POST /groups/:id/members` (with `role: "owner"` or `"admin"`) |
 | Remove member | Owner or Admin | `DELETE /groups/:id/members/:user_id` |
 | Remove the owner | Nobody (forbidden) | `DELETE /groups/:id/members/:user_id` (target is owner) |
+| Update member role | Owner or Admin | `PATCH /groups/:id/members/:user_id` |
+| Change owner's role | Nobody (forbidden) | `PATCH /groups/:id/members/:user_id` (target is owner) |
+| Assign owner role | Owner only | `PATCH /groups/:id/members/:user_id` (with `role: "owner"`) |
+| Update group name | Owner only | `PUT /groups/:id` |
 | Delete group | Owner only | `DELETE /groups/:id` |
+| Leave group | Member (not owner) | `POST /groups/:id/leave` |
 | Send group message | Member | `POST /messages` (with `group_id`) |
 
 **Auth errors return HTTP 403 Forbidden.**
@@ -413,13 +423,13 @@ go mod tidy
 
 Tests use **SQLite in-memory** (`:memory:` with `MaxOpenConns(1)`) — no PostgreSQL needed.
 
-### Test Coverage by Layer (130+ total subtests)
+### Test Coverage by Layer (190+ total subtests)
 
 | Package | Test Files | Approach |
 |---|---|---|
-| `repository/` | 4 test files, 40 subtests | Real SQLite in-memory, full CRUD + edge cases |
-| `service/` | 3 test files, 29 subtests | Mocked repositories via function-field mocks |
-| `handler/` | 5 test files, ~55 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
+| `repository/` | 4 test files, ~50 subtests | Real SQLite in-memory, full CRUD + edge cases |
+| `service/` | 3 test files, ~50 subtests | Mocked repositories via function-field mocks |
+| `handler/` | 5 test files, ~80 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
 | `middleware/` | 1 test file, 6 subtests | Real Gin engine with test routes, `httptest.NewRecorder()` |
 
 ### Service Test Mock Pattern
@@ -509,11 +519,22 @@ services:
 
 ---
 
-## 📜 Git History (10 commits ahead of origin/master)
+## 📜 Git History (12 commits ahead of origin/master)
 
 | Commit | Description |
 |---|---|
 | `2e17b90` | Phase 1: Service tests, handler tests, lint config, error fixes |
+| `7b07ea1` | Phase 2: Authorization checks and file upload endpoint |
+| `48d62c5` | Switch database from SQLite to PostgreSQL |
+| `0ac35b1` | Add Docker setup with multi-stage build and docker-compose |
+| `cf524fd` | Add combined file upload + message sending endpoint |
+| `ead2ebf` | Add graceful shutdown with signal handling |
+| `a2652a9` | Add STRUCTURE.md with comprehensive project documentation |
+| `4294b12` | Add input validation across all handler endpoints |
+| `e011299` | Add per-IP sliding window rate limiter middleware |
+| `400fe59` | Add unit tests for rate limiter middleware |
+| `8b27600` | Update STRUCTURE.md with rate limiter, graceful shutdown, and validation docs |
+| `9034a3f` | Add 5 missing group API endpoints with full test coverage |
 | `7b07ea1` | Phase 2: Authorization checks and file upload endpoint |
 | `48d62c5` | Switch database from SQLite to PostgreSQL |
 | `0ac35b1` | Add Docker setup with multi-stage build and docker-compose |
