@@ -1,9 +1,19 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"chat/handler"
+	"chat/middleware"
+)
+
+// Default rate limit constants
+const (
+	defaultRequests = 100                // max requests per window
+	defaultWindow   = time.Minute        // sliding window duration
+	uploadRequests  = 10                 // stricter limit for file uploads
 )
 
 func SetupRouter(
@@ -14,13 +24,23 @@ func SetupRouter(
 ) *gin.Engine {
 	r := gin.Default()
 
-	// Health check
+	// Create rate limiter instances
+	globalLimiter := middleware.NewRateLimiter(middleware.RateLimiterConfig{
+		Requests: defaultRequests,
+		Window:   defaultWindow,
+	})
+	uploadLimiter := middleware.NewRateLimiter(middleware.RateLimiterConfig{
+		Requests: uploadRequests,
+		Window:   defaultWindow,
+	})
+
+	// Health check — no rate limit
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	// User routes
-	userRoutes := r.Group("/users")
+	userRoutes := r.Group("/users", globalLimiter)
 	{
 		userRoutes.POST("", userHandler.CreateUser)
 		userRoutes.GET("", userHandler.GetAllUsers)
@@ -28,7 +48,7 @@ func SetupRouter(
 	}
 
 	// Group routes
-	groupRoutes := r.Group("/groups")
+	groupRoutes := r.Group("/groups", globalLimiter)
 	{
 		groupRoutes.POST("", groupHandler.CreateGroup)
 		groupRoutes.DELETE("/:id", groupHandler.DeleteGroup)
@@ -38,7 +58,7 @@ func SetupRouter(
 	}
 
 	// Message routes
-	messageRoutes := r.Group("/messages")
+	messageRoutes := r.Group("/messages", globalLimiter)
 	{
 		messageRoutes.POST("", messageHandler.SendMessage)
 		messageRoutes.POST("/upload", messageHandler.SendFileMessage)
@@ -48,8 +68,8 @@ func SetupRouter(
 		messageRoutes.GET("/unseen/:user_id", messageHandler.GetUnseenCount)
 	}
 
-	// Upload route
-	r.POST("/upload", fileHandler.Upload)
+	// Upload route — stricter limit (10 req/min)
+	r.POST("/upload", uploadLimiter, fileHandler.Upload)
 
 	// Serve uploaded files statically
 	r.Static("/uploads", "./uploads")
