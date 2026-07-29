@@ -197,7 +197,7 @@ chat/
 
 ---
 
-## 🌐 API Endpoints (22 total)
+## 🌐 API Endpoints (24 total)
 
 Base URL: `http://localhost:8080`
 
@@ -233,9 +233,15 @@ Base URL: `http://localhost:8080`
 | POST | `/messages` | Send message (body: `sender_id`, `receiver_id` or `group_id`, `type`, `content`, `file_id`) |
 | POST | `/messages/upload` | Upload file + send message in one step (multipart: `file`, `sender_id`, `receiver_id`/`group_id`, `content`) |
 | GET | `/messages` | Get conversation (query: `receiver_id` or `group_id`, `limit` default 50, `offset` default 0) |
+| PUT | `/messages/:id` | Edit message (body: `sender_id`, `content`; can only edit own) |
 | POST | `/messages/:id/seen` | Mark message as seen (body: `user_id`) |
 | DELETE | `/messages/:id` | Soft-delete message |
 | GET | `/messages/unseen/:user_id` | Get unseen counts grouped by sender + group |
+
+### Conversations — *100 req/min*
+| Method | Path | Description |
+|---|---|---|
+| GET | `/conversations?user_id=` | List all conversations with latest message + unseen count |
 
 ### File Upload — *10 req/min (stricter)*
 | Method | Path | Description |
@@ -423,13 +429,13 @@ go mod tidy
 
 Tests use **SQLite in-memory** (`:memory:` with `MaxOpenConns(1)`) — no PostgreSQL needed.
 
-### Test Coverage by Layer (190+ total subtests)
+### Test Coverage by Layer (220+ total subtests)
 
 | Package | Test Files | Approach |
 |---|---|---|
-| `repository/` | 4 test files, ~50 subtests | Real SQLite in-memory, full CRUD + edge cases |
-| `service/` | 3 test files, ~50 subtests | Mocked repositories via function-field mocks |
-| `handler/` | 5 test files, ~80 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
+| `repository/` | 4 test files, ~55 subtests | Real SQLite in-memory, full CRUD + edge cases |
+| `service/` | 3 test files, ~55 subtests | Mocked repositories via function-field mocks |
+| `handler/` | 5 test files, ~85 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
 | `middleware/` | 1 test file, 6 subtests | Real Gin engine with test routes, `httptest.NewRecorder()` |
 
 ### Service Test Mock Pattern
@@ -519,7 +525,7 @@ services:
 
 ---
 
-## 📜 Git History (12 commits ahead of origin/master)
+## 📜 Git History (16 commits ahead of origin/master)
 
 | Commit | Description |
 |---|---|
@@ -535,12 +541,6 @@ services:
 | `400fe59` | Add unit tests for rate limiter middleware |
 | `8b27600` | Update STRUCTURE.md with rate limiter, graceful shutdown, and validation docs |
 | `9034a3f` | Add 5 missing group API endpoints with full test coverage |
-| `7b07ea1` | Phase 2: Authorization checks and file upload endpoint |
-| `48d62c5` | Switch database from SQLite to PostgreSQL |
-| `0ac35b1` | Add Docker setup with multi-stage build and docker-compose |
-| `cf524fd` | Add combined file upload + message sending endpoint |
-| `ead2ebf` | Add graceful shutdown with signal handling |
-| `a2652a9` | Add STRUCTURE.md with comprehensive project documentation |
-| `4294b12` | Add input validation across all handler endpoints |
-| `e011299` | Add per-IP sliding window rate limiter middleware |
-| `400fe59` | Add unit tests for rate limiter middleware |
+| `7f5af42` | Update STRUCTURE.md with 5 new group endpoints and updated stats |
+| `5815e7f` | Add private chat features: conversation list and edit message |
+| `26f7c6a` | Update Postman collection with conversations list and edit message endpoints |
