@@ -1,9 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 
@@ -12,15 +16,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func uintPtr(v uint) *uint { return &v }
 
-func setupMessageRoutes(svc *mockMsgSvc) *gin.Engine {
+func setupMessageRoutes(svc *mockMsgSvc, fileSvc *mockFileSvc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	h := NewMessageHandler(svc)
+	h := NewMessageHandler(svc, fileSvc)
 	r := gin.New()
 	r.POST("/messages", h.SendMessage)
+	r.POST("/messages/upload", h.SendFileMessage)
 	r.GET("/messages", h.GetConversation)
 	r.POST("/messages/:id/seen", h.MarkSeen)
 	r.DELETE("/messages/:id", h.DeleteMessage)
@@ -36,7 +42,7 @@ func TestMessageHandler_SendMessage(t *testing.T) {
 				return nil
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"sender_id":1,"receiver_id":2,"type":"text","content":"Hello!"}`
 		w := httptest.NewRecorder()
@@ -53,7 +59,7 @@ func TestMessageHandler_SendMessage(t *testing.T) {
 
 	t.Run("missing sender_id", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"receiver_id":2,"type":"text"}`
 		w := httptest.NewRecorder()
@@ -66,7 +72,7 @@ func TestMessageHandler_SendMessage(t *testing.T) {
 
 	t.Run("missing type", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"sender_id":1,"receiver_id":2,"content":"Hello!"}`
 		w := httptest.NewRecorder()
@@ -83,7 +89,7 @@ func TestMessageHandler_SendMessage(t *testing.T) {
 				return service.ErrInvalidConversation
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"sender_id":1,"type":"text","content":"Hi"}`
 		w := httptest.NewRecorder()
@@ -104,7 +110,7 @@ func TestMessageHandler_GetConversation(t *testing.T) {
 				}, nil
 			},
 		}
-		r := setupMessageRoutes(svc)
+	r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/messages?receiver_id=2", nil)
@@ -123,7 +129,7 @@ func TestMessageHandler_GetConversation(t *testing.T) {
 				return nil, assert.AnError
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/messages?receiver_id=2", nil)
@@ -140,7 +146,7 @@ func TestMessageHandler_MarkSeen(t *testing.T) {
 				return nil
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"user_id":2}`
 		w := httptest.NewRecorder()
@@ -153,7 +159,7 @@ func TestMessageHandler_MarkSeen(t *testing.T) {
 
 	t.Run("invalid message id", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{"user_id":2}`
 		w := httptest.NewRecorder()
@@ -166,7 +172,7 @@ func TestMessageHandler_MarkSeen(t *testing.T) {
 
 	t.Run("missing user_id", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		body := `{}`
 		w := httptest.NewRecorder()
@@ -185,7 +191,7 @@ func TestMessageHandler_DeleteMessage(t *testing.T) {
 				return nil
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("DELETE", "/messages/1", nil)
@@ -196,7 +202,7 @@ func TestMessageHandler_DeleteMessage(t *testing.T) {
 
 	t.Run("invalid message id", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("DELETE", "/messages/abc", nil)
@@ -211,7 +217,7 @@ func TestMessageHandler_DeleteMessage(t *testing.T) {
 				return assert.AnError
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("DELETE", "/messages/1", nil)
@@ -232,7 +238,7 @@ func TestMessageHandler_GetUnseenCount(t *testing.T) {
 				}, nil
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/messages/unseen/1", nil)
@@ -243,7 +249,7 @@ func TestMessageHandler_GetUnseenCount(t *testing.T) {
 
 	t.Run("invalid user id", func(t *testing.T) {
 		svc := &mockMsgSvc{}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/messages/unseen/abc", nil)
@@ -258,12 +264,181 @@ func TestMessageHandler_GetUnseenCount(t *testing.T) {
 				return nil, assert.AnError
 			},
 		}
-		r := setupMessageRoutes(svc)
+		r := setupMessageRoutes(svc, &mockFileSvc{})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/messages/unseen/1", nil)
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func filePart(w *multipart.Writer, fieldname, filename, contentType, data string) error {
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fieldname, filename))
+	h.Set("Content-Type", contentType)
+	fw, err := w.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	_, err = fw.Write([]byte(data))
+	return err
+}
+
+func TestMessageHandler_SendFileMessage(t *testing.T) {
+	t.Run("sends image to direct conversation", func(t *testing.T) {
+		fileSvc := &mockFileSvc{
+			uploadFileFn: func(file multipart.File, header *multipart.FileHeader) (*models.File, error) {
+				return &models.File{ID: 10, URL: "/uploads/test.png", Size: 100, Type: "image/png"}, nil
+			},
+		}
+		msgSvc := &mockMsgSvc{
+			sendMessageFn: func(msg *models.Message) error {
+				msg.ID = 1
+				return nil
+			},
+		}
+		r := setupMessageRoutes(msgSvc, fileSvc)
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		require.NoError(t, filePart(w, "file", "photo.png", "image/png", "fake-image-data"))
+		w.WriteField("sender_id", "1")
+		w.WriteField("receiver_id", "2")
+		w.WriteField("content", "Check out this photo!")
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusCreated, resp.Code)
+
+		var result models.Message
+		decodeJSON(resp.Body, &result)
+		assert.Equal(t, uint(1), result.ID)
+		assert.Equal(t, uint(1), result.SenderID)
+		assert.NotNil(t, result.FileID)
+		assert.Equal(t, uint(10), *result.FileID)
+		assert.Equal(t, models.MessageTypeImage, result.Type)
+	})
+
+	t.Run("sends file to group conversation", func(t *testing.T) {
+		fileSvc := &mockFileSvc{
+			uploadFileFn: func(file multipart.File, header *multipart.FileHeader) (*models.File, error) {
+				return &models.File{ID: 11, URL: "/uploads/doc.pdf", Size: 500, Type: "application/pdf"}, nil
+			},
+		}
+		msgSvc := &mockMsgSvc{
+			sendMessageFn: func(msg *models.Message) error {
+				msg.ID = 2
+				return nil
+			},
+		}
+		r := setupMessageRoutes(msgSvc, fileSvc)
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		require.NoError(t, filePart(w, "file", "document.pdf", "application/pdf", "fake-pdf-data"))
+		w.WriteField("sender_id", "1")
+		w.WriteField("group_id", "5")
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusCreated, resp.Code)
+
+		var result models.Message
+		decodeJSON(resp.Body, &result)
+		assert.Equal(t, uint(2), result.ID)
+		assert.Equal(t, uint(11), *result.FileID)
+		assert.Equal(t, models.MessageTypeFile, result.Type)
+	})
+
+	t.Run("missing sender_id", func(t *testing.T) {
+		r := setupMessageRoutes(&mockMsgSvc{}, &mockFileSvc{})
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		require.NoError(t, filePart(w, "file", "test.png", "image/png", "data"))
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		r := setupMessageRoutes(&mockMsgSvc{}, &mockFileSvc{})
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		w.WriteField("sender_id", "1")
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("file upload fails", func(t *testing.T) {
+		fileSvc := &mockFileSvc{
+			uploadFileFn: func(file multipart.File, header *multipart.FileHeader) (*models.File, error) {
+				return nil, assert.AnError
+			},
+		}
+		r := setupMessageRoutes(&mockMsgSvc{}, fileSvc)
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		require.NoError(t, filePart(w, "file", "test.png", "image/png", "data"))
+		w.WriteField("sender_id", "1")
+		w.WriteField("receiver_id", "2")
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("message send fails", func(t *testing.T) {
+		fileSvc := &mockFileSvc{
+			uploadFileFn: func(file multipart.File, header *multipart.FileHeader) (*models.File, error) {
+				return &models.File{ID: 99, URL: "/uploads/cleanup.txt", Size: 10, Type: "text/plain"}, nil
+			},
+		}
+		msgSvc := &mockMsgSvc{
+			sendMessageFn: func(msg *models.Message) error {
+				return service.ErrInvalidConversation
+			},
+		}
+		r := setupMessageRoutes(msgSvc, fileSvc)
+
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		require.NoError(t, filePart(w, "file", "test.txt", "text/plain", "data"))
+		w.WriteField("sender_id", "1")
+		w.Close()
+
+		req := httptest.NewRequest("POST", "/messages/upload", &buf)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
 	})
 }

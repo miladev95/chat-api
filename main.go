@@ -27,7 +27,7 @@ func main() {
 	// Handlers
 	userHandler := handler.NewUserHandler(userSvc)
 	groupHandler := handler.NewGroupHandler(groupSvc)
-	messageHandler := handler.NewMessageHandler(msgSvc)
+	messageHandler := handler.NewMessageHandler(msgSvc, fileSvc)
 	fileHandler := handler.NewFileHandler(fileSvc)
 
 	// Router

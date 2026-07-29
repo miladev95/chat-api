@@ -41,6 +41,7 @@ func SetupRouter(
 	messageRoutes := r.Group("/messages")
 	{
 		messageRoutes.POST("", messageHandler.SendMessage)
+		messageRoutes.POST("/upload", messageHandler.SendFileMessage)
 		messageRoutes.GET("", messageHandler.GetConversation)
 		messageRoutes.POST("/:id/seen", messageHandler.MarkSeen)
 		messageRoutes.DELETE("/:id", messageHandler.DeleteMessage)

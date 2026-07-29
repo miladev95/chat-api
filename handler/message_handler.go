@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,11 +12,12 @@ import (
 )
 
 type MessageHandler struct {
-	msgService service.MessageService
+	msgService  service.MessageService
+	fileService service.FileService
 }
 
-func NewMessageHandler(msgService service.MessageService) *MessageHandler {
-	return &MessageHandler{msgService: msgService}
+func NewMessageHandler(msgService service.MessageService, fileService service.FileService) *MessageHandler {
+	return &MessageHandler{msgService: msgService, fileService: fileService}
 }
 
 // POST /messages
@@ -94,6 +96,69 @@ func (h *MessageHandler) MarkSeen(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "marked as seen"})
+}
+
+// POST /messages/upload — multipart: upload a file and send it as a chat message in one request.
+// Fields: file, sender_id, receiver_id OR group_id, content (optional)
+func (h *MessageHandler) SendFileMessage(c *gin.Context) {
+	senderID, err := strconv.Atoi(c.PostForm("sender_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sender_id is required and must be numeric"})
+		return
+	}
+
+	// Parse the uploaded file
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	defer file.Close()
+
+	// Upload file and create metadata record
+	fileRecord, err := h.fileService.UploadFile(file, header)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Parse optional conversation targets
+	var receiverID, groupID *uint
+	if rid := c.PostForm("receiver_id"); rid != "" {
+		if id, err := strconv.Atoi(rid); err == nil {
+			tmp := uint(id)
+			receiverID = &tmp
+		}
+	}
+	if gid := c.PostForm("group_id"); gid != "" {
+		if id, err := strconv.Atoi(gid); err == nil {
+			tmp := uint(id)
+			groupID = &tmp
+		}
+	}
+
+	// Determine message type based on content type
+	msgType := models.MessageTypeFile
+	if strings.HasPrefix(header.Header.Get("Content-Type"), "image/") {
+		msgType = models.MessageTypeImage
+	}
+
+	// Build and send the message
+	msg := &models.Message{
+		SenderID:   uint(senderID),
+		ReceiverID: receiverID,
+		GroupID:    groupID,
+		Type:       msgType,
+		Content:    c.PostForm("content"),
+		FileID:     &fileRecord.ID,
+	}
+
+	if err := h.msgService.SendMessage(msg); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, msg)
 }
 
 // DELETE /messages/:id
