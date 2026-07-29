@@ -28,22 +28,30 @@ func (m *mockUserSvc) GetAllUsers() ([]models.User, error) { return m.getAllUser
 // --- GroupService mock ---
 
 type mockGroupSvc struct {
-	createGroupFn  func(name string) (*models.Group, error)
-	deleteGroupFn  func(groupID, requesterID uint) error
-	addMemberFn    func(groupID, userID uint, role string, requesterID uint) error
-	removeMemberFn func(groupID, userID uint, requesterID uint) error
-	getMembersFn   func(groupID uint) ([]models.GroupMember, error)
-	getGroupByIDFn func(groupID uint) (*models.Group, error)
-	isMemberFn     func(groupID, userID uint) (bool, error)
+	createGroupFn     func(name string) (*models.Group, error)
+	deleteGroupFn     func(groupID, requesterID uint) error
+	addMemberFn       func(groupID, userID uint, role string, requesterID uint) error
+	removeMemberFn    func(groupID, userID uint, requesterID uint) error
+	updateMemberRoleFn func(groupID, userID, requesterID uint, role string) error
+	getMembersFn      func(groupID uint) ([]models.GroupMember, error)
+	getGroupByIDFn    func(groupID uint) (*models.Group, error)
+	getAllGroupsFn    func() ([]models.Group, error)
+	updateGroupFn     func(groupID, requesterID uint, name string) error
+	isMemberFn        func(groupID, userID uint) (bool, error)
+	leaveGroupFn      func(groupID, userID uint) error
 }
 
-func (m *mockGroupSvc) CreateGroup(name string) (*models.Group, error)     { return m.createGroupFn(name) }
-func (m *mockGroupSvc) DeleteGroup(groupID, requesterID uint) error        { return m.deleteGroupFn(groupID, requesterID) }
+func (m *mockGroupSvc) CreateGroup(name string) (*models.Group, error)                  { return m.createGroupFn(name) }
+func (m *mockGroupSvc) DeleteGroup(groupID, requesterID uint) error                     { return m.deleteGroupFn(groupID, requesterID) }
 func (m *mockGroupSvc) AddMember(groupID, userID uint, role string, requesterID uint) error { return m.addMemberFn(groupID, userID, role, requesterID) }
-func (m *mockGroupSvc) RemoveMember(groupID, userID uint, requesterID uint) error { return m.removeMemberFn(groupID, userID, requesterID) }
-func (m *mockGroupSvc) GetMembers(groupID uint) ([]models.GroupMember, error) { return m.getMembersFn(groupID) }
-func (m *mockGroupSvc) GetGroupByID(groupID uint) (*models.Group, error)  { return m.getGroupByIDFn(groupID) }
-func (m *mockGroupSvc) IsMember(groupID, userID uint) (bool, error)       { return m.isMemberFn(groupID, userID) }
+func (m *mockGroupSvc) RemoveMember(groupID, userID uint, requesterID uint) error       { return m.removeMemberFn(groupID, userID, requesterID) }
+func (m *mockGroupSvc) UpdateMemberRole(groupID, userID, requesterID uint, role string) error { return m.updateMemberRoleFn(groupID, userID, requesterID, role) }
+func (m *mockGroupSvc) GetMembers(groupID uint) ([]models.GroupMember, error)           { return m.getMembersFn(groupID) }
+func (m *mockGroupSvc) GetGroupByID(groupID uint) (*models.Group, error)                { return m.getGroupByIDFn(groupID) }
+func (m *mockGroupSvc) GetAllGroups() ([]models.Group, error)                           { return m.getAllGroupsFn() }
+func (m *mockGroupSvc) UpdateGroup(groupID, requesterID uint, name string) error        { return m.updateGroupFn(groupID, requesterID, name) }
+func (m *mockGroupSvc) IsMember(groupID, userID uint) (bool, error)                     { return m.isMemberFn(groupID, userID) }
+func (m *mockGroupSvc) LeaveGroup(groupID, userID uint) error                           { return m.leaveGroupFn(groupID, userID) }
 
 // --- MessageService mock ---
 

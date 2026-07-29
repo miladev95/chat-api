@@ -171,6 +171,74 @@ func TestGroupRepository_RemoveMember(t *testing.T) {
 	})
 }
 
+func TestGroupRepository_GetAllGroups(t *testing.T) {
+	db := setupTestDB()
+	repo := NewGroupRepository(db)
+
+	t.Run("returns empty slice when no groups exist", func(t *testing.T) {
+		groups, err := repo.GetAllGroups()
+		assert.NoError(t, err)
+		assert.Empty(t, groups)
+	})
+
+	t.Run("returns all created groups", func(t *testing.T) {
+		assert.NoError(t, repo.CreateGroup(&models.Group{Name: "Alpha"}))
+		assert.NoError(t, repo.CreateGroup(&models.Group{Name: "Beta"}))
+
+		groups, err := repo.GetAllGroups()
+		assert.NoError(t, err)
+		assert.Len(t, groups, 2)
+	})
+}
+
+func TestGroupRepository_UpdateGroup(t *testing.T) {
+	db := setupTestDB()
+	repo := NewGroupRepository(db)
+
+	group := &models.Group{Name: "Original Name"}
+	assert.NoError(t, repo.CreateGroup(group))
+
+	t.Run("updates group name", func(t *testing.T) {
+		err := repo.UpdateGroup(group.ID, "Updated Name")
+		assert.NoError(t, err)
+
+		updated, err := repo.GetGroupByID(group.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, "Updated Name", updated.Name)
+	})
+
+	t.Run("updating non-existent group does not error", func(t *testing.T) {
+		err := repo.UpdateGroup(9999, "Ghost")
+		assert.NoError(t, err)
+	})
+}
+
+func TestGroupRepository_UpdateMemberRole(t *testing.T) {
+	db := setupTestDB()
+	groupRepo := NewGroupRepository(db)
+	userRepo := NewUserRepository(db)
+
+	group := &models.Group{Name: "Role Test Group"}
+	user := &models.User{Username: "role_user", Email: "role@example.com"}
+	assert.NoError(t, groupRepo.CreateGroup(group))
+	assert.NoError(t, userRepo.CreateUser(user))
+	assert.NoError(t, groupRepo.AddMember(group.ID, user.ID, models.RoleMember))
+
+	t.Run("updates member role", func(t *testing.T) {
+		err := groupRepo.UpdateMemberRole(group.ID, user.ID, models.RoleAdmin)
+		assert.NoError(t, err)
+
+		role, err := groupRepo.GetMemberRole(group.ID, user.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, models.RoleAdmin, role)
+	})
+
+	t.Run("updating non-existent member does not error", func(t *testing.T) {
+		err := groupRepo.UpdateMemberRole(group.ID, 9999, models.RoleAdmin)
+		assert.NoError(t, err)
+	})
+}
+
 func TestGroupRepository_DeleteGroup(t *testing.T) {
 	db := setupTestDB()
 	groupRepo := NewGroupRepository(db)

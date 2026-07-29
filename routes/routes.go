@@ -50,11 +50,16 @@ func SetupRouter(
 	// Group routes
 	groupRoutes := r.Group("/groups", globalLimiter)
 	{
+		groupRoutes.GET("", groupHandler.GetAllGroups)
+		groupRoutes.GET("/:id", groupHandler.GetGroupByID)
 		groupRoutes.POST("", groupHandler.CreateGroup)
+		groupRoutes.PUT("/:id", groupHandler.UpdateGroup)
 		groupRoutes.DELETE("/:id", groupHandler.DeleteGroup)
 		groupRoutes.POST("/:id/members", groupHandler.AddMember)
+		groupRoutes.PATCH("/:id/members/:user_id", groupHandler.UpdateMemberRole)
 		groupRoutes.DELETE("/:id/members/:user_id", groupHandler.RemoveMember)
 		groupRoutes.GET("/:id/members", groupHandler.GetMembers)
+		groupRoutes.POST("/:id/leave", groupHandler.LeaveGroup)
 	}
 
 	// Message routes

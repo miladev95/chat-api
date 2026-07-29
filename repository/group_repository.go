@@ -10,8 +10,11 @@ import (
 type GroupRepository interface {
 	CreateGroup(group *models.Group) error
 	GetGroupByID(groupID uint) (*models.Group, error)
+	GetAllGroups() ([]models.Group, error)
+	UpdateGroup(groupID uint, name string) error
 	AddMember(groupID, userID uint, role string) error
 	RemoveMember(groupID, userID uint) error
+	UpdateMemberRole(groupID, userID uint, role string) error
 	GetMembers(groupID uint) ([]models.GroupMember, error)
 	DeleteGroup(groupID uint) error
 	IsMember(groupID, userID uint) (bool, error)
@@ -36,6 +39,18 @@ func (r *groupRepo) GetGroupByID(groupID uint) (*models.Group, error) {
 		return nil, err
 	}
 	return &group, nil
+}
+
+func (r *groupRepo) GetAllGroups() ([]models.Group, error) {
+	var groups []models.Group
+	if err := r.db.Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+func (r *groupRepo) UpdateGroup(groupID uint, name string) error {
+	return r.db.Model(&models.Group{}).Where("id = ?", groupID).Update("name", name).Error
 }
 
 func (r *groupRepo) AddMember(groupID, userID uint, role string) error {
@@ -68,6 +83,12 @@ func (r *groupRepo) DeleteGroup(groupID uint) error {
 
 func (r *groupRepo) RemoveMember(groupID, userID uint) error {
 	return r.db.Where("group_id = ? AND user_id = ?", groupID, userID).Delete(&models.GroupMember{}).Error
+}
+
+func (r *groupRepo) UpdateMemberRole(groupID, userID uint, role string) error {
+	return r.db.Model(&models.GroupMember{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Update("role", role).Error
 }
 
 func (r *groupRepo) IsMember(groupID, userID uint) (bool, error) {
