@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"mime/multipart"
+
 	"chat/models"
 	"chat/service"
 )
@@ -9,6 +11,7 @@ import (
 var _ service.UserService = (*mockUserSvc)(nil)
 var _ service.GroupService = (*mockGroupSvc)(nil)
 var _ service.MessageService = (*mockMsgSvc)(nil)
+var _ service.FileService = (*mockFileSvc)(nil)
 
 // --- UserService mock ---
 
@@ -26,19 +29,21 @@ func (m *mockUserSvc) GetAllUsers() ([]models.User, error) { return m.getAllUser
 
 type mockGroupSvc struct {
 	createGroupFn  func(name string) (*models.Group, error)
-	deleteGroupFn  func(groupID uint) error
-	addMemberFn    func(groupID, userID uint, role string) error
-	removeMemberFn func(groupID, userID uint) error
+	deleteGroupFn  func(groupID, requesterID uint) error
+	addMemberFn    func(groupID, userID uint, role string, requesterID uint) error
+	removeMemberFn func(groupID, userID uint, requesterID uint) error
 	getMembersFn   func(groupID uint) ([]models.GroupMember, error)
 	getGroupByIDFn func(groupID uint) (*models.Group, error)
+	isMemberFn     func(groupID, userID uint) (bool, error)
 }
 
-func (m *mockGroupSvc) CreateGroup(name string) (*models.Group, error)    { return m.createGroupFn(name) }
-func (m *mockGroupSvc) DeleteGroup(groupID uint) error                   { return m.deleteGroupFn(groupID) }
-func (m *mockGroupSvc) AddMember(groupID, userID uint, role string) error { return m.addMemberFn(groupID, userID, role) }
-func (m *mockGroupSvc) RemoveMember(groupID, userID uint) error           { return m.removeMemberFn(groupID, userID) }
+func (m *mockGroupSvc) CreateGroup(name string) (*models.Group, error)     { return m.createGroupFn(name) }
+func (m *mockGroupSvc) DeleteGroup(groupID, requesterID uint) error        { return m.deleteGroupFn(groupID, requesterID) }
+func (m *mockGroupSvc) AddMember(groupID, userID uint, role string, requesterID uint) error { return m.addMemberFn(groupID, userID, role, requesterID) }
+func (m *mockGroupSvc) RemoveMember(groupID, userID uint, requesterID uint) error { return m.removeMemberFn(groupID, userID, requesterID) }
 func (m *mockGroupSvc) GetMembers(groupID uint) ([]models.GroupMember, error) { return m.getMembersFn(groupID) }
-func (m *mockGroupSvc) GetGroupByID(groupID uint) (*models.Group, error) { return m.getGroupByIDFn(groupID) }
+func (m *mockGroupSvc) GetGroupByID(groupID uint) (*models.Group, error)  { return m.getGroupByIDFn(groupID) }
+func (m *mockGroupSvc) IsMember(groupID, userID uint) (bool, error)       { return m.isMemberFn(groupID, userID) }
 
 // --- MessageService mock ---
 
@@ -48,6 +53,16 @@ type mockMsgSvc struct {
 	markSeenFn        func(messageID, userID uint) error
 	deleteMessageFn   func(messageID uint) error
 	getUnseenCountFn  func(userID uint) (map[string]interface{}, error)
+}
+
+// --- FileService mock ---
+
+type mockFileSvc struct {
+	uploadFileFn func(file multipart.File, header *multipart.FileHeader) (*models.File, error)
+}
+
+func (m *mockFileSvc) UploadFile(file multipart.File, header *multipart.FileHeader) (*models.File, error) {
+	return m.uploadFileFn(file, header)
 }
 
 func (m *mockMsgSvc) SendMessage(msg *models.Message) error                       { return m.sendMessageFn(msg) }

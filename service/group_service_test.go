@@ -40,35 +40,55 @@ func TestGroupService_CreateGroup(t *testing.T) {
 }
 
 func TestGroupService_DeleteGroup(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
+	t.Run("owner can delete", func(t *testing.T) {
 		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleOwner, nil
+			},
 			deleteGroupFn: func(id uint) error {
 				return nil
 			},
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.DeleteGroup(1)
+		err := svc.DeleteGroup(1, 1)
 		assert.NoError(t, err)
 	})
 
-	t.Run("repo error", func(t *testing.T) {
+	t.Run("non-owner cannot delete", func(t *testing.T) {
 		repo := &mockGroupRepo{
-			deleteGroupFn: func(id uint) error {
-				return errTest
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleMember, nil
 			},
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.DeleteGroup(1)
+		err := svc.DeleteGroup(1, 2)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotOwner)
+	})
+
+	t.Run("non-member cannot delete", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return "", gorm.ErrRecordNotFound
+			},
+		}
+		svc := NewGroupService(repo)
+
+		err := svc.DeleteGroup(1, 99)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotMember)
 	})
 }
 
 func TestGroupService_AddMember(t *testing.T) {
-	t.Run("success with explicit role", func(t *testing.T) {
+	t.Run("owner can add member", func(t *testing.T) {
 		var capturedRole string
 		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleOwner, nil
+			},
 			addMemberFn: func(gid, uid uint, role string) error {
 				capturedRole = role
 				return nil
@@ -76,14 +96,45 @@ func TestGroupService_AddMember(t *testing.T) {
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.AddMember(1, 2, models.RoleAdmin)
+		err := svc.AddMember(1, 2, models.RoleMember, 1)
 		assert.NoError(t, err)
-		assert.Equal(t, models.RoleAdmin, capturedRole)
+		assert.Equal(t, models.RoleMember, capturedRole)
+	})
+
+	t.Run("admin can add member", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleAdmin, nil
+			},
+			addMemberFn: func(gid, uid uint, role string) error {
+				return nil
+			},
+		}
+		svc := NewGroupService(repo)
+
+		err := svc.AddMember(1, 2, models.RoleMember, 3)
+		assert.NoError(t, err)
+	})
+
+	t.Run("admin cannot assign owner role", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleAdmin, nil
+			},
+		}
+		svc := NewGroupService(repo)
+
+		err := svc.AddMember(1, 2, models.RoleOwner, 3)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotOwner)
 	})
 
 	t.Run("defaults to member role when empty", func(t *testing.T) {
 		var capturedRole string
 		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleOwner, nil
+			},
 			addMemberFn: func(gid, uid uint, role string) error {
 				capturedRole = role
 				return nil
@@ -91,47 +142,84 @@ func TestGroupService_AddMember(t *testing.T) {
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.AddMember(1, 2, "")
+		err := svc.AddMember(1, 2, "", 1)
 		assert.NoError(t, err)
 		assert.Equal(t, models.RoleMember, capturedRole)
 	})
 
-	t.Run("repo error", func(t *testing.T) {
+	t.Run("non-member cannot add", func(t *testing.T) {
 		repo := &mockGroupRepo{
-			addMemberFn: func(gid, uid uint, role string) error {
-				return errTest
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return "", gorm.ErrRecordNotFound
 			},
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.AddMember(1, 2, models.RoleMember)
+		err := svc.AddMember(1, 2, models.RoleMember, 99)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotMember)
+	})
+
+	t.Run("member cannot add", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return models.RoleMember, nil
+			},
+		}
+		svc := NewGroupService(repo)
+
+		err := svc.AddMember(1, 2, models.RoleMember, 3)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrInsufficientRole)
 	})
 }
 
 func TestGroupService_RemoveMember(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
+	t.Run("owner can remove member", func(t *testing.T) {
 		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				if uid == 1 { // requester
+					return models.RoleOwner, nil
+				}
+				return models.RoleMember, nil // target
+			},
 			removeMemberFn: func(gid, uid uint) error {
 				return nil
 			},
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.RemoveMember(1, 2)
+		err := svc.RemoveMember(1, 2, 1)
 		assert.NoError(t, err)
 	})
 
-	t.Run("repo error", func(t *testing.T) {
+	t.Run("cannot remove owner", func(t *testing.T) {
 		repo := &mockGroupRepo{
-			removeMemberFn: func(gid, uid uint) error {
-				return errTest
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				if uid == 1 { // requester
+					return models.RoleOwner, nil
+				}
+				return models.RoleOwner, nil // target is also owner
 			},
 		}
 		svc := NewGroupService(repo)
 
-		err := svc.RemoveMember(1, 2)
+		err := svc.RemoveMember(1, 2, 1)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotOwner)
+	})
+
+	t.Run("non-member cannot remove", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			getMemberRoleFn: func(gid, uid uint) (string, error) {
+				return "", gorm.ErrRecordNotFound
+			},
+		}
+		svc := NewGroupService(repo)
+
+		err := svc.RemoveMember(1, 2, 99)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrNotMember)
 	})
 }
 
@@ -193,5 +281,33 @@ func TestGroupService_GetGroupByID(t *testing.T) {
 		group, err := svc.GetGroupByID(999)
 		assert.Error(t, err)
 		assert.Nil(t, group)
+	})
+}
+
+func TestGroupService_IsMember(t *testing.T) {
+	t.Run("returns true when member", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			isMemberFn: func(gid, uid uint) (bool, error) {
+				return true, nil
+			},
+		}
+		svc := NewGroupService(repo)
+
+		isMember, err := svc.IsMember(1, 2)
+		assert.NoError(t, err)
+		assert.True(t, isMember)
+	})
+
+	t.Run("returns false when not member", func(t *testing.T) {
+		repo := &mockGroupRepo{
+			isMemberFn: func(gid, uid uint) (bool, error) {
+				return false, nil
+			},
+		}
+		svc := NewGroupService(repo)
+
+		isMember, err := svc.IsMember(1, 99)
+		assert.NoError(t, err)
+		assert.False(t, isMember)
 	})
 }

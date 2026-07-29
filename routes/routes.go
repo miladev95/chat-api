@@ -10,6 +10,7 @@ func SetupRouter(
 	userHandler *handler.UserHandler,
 	groupHandler *handler.GroupHandler,
 	messageHandler *handler.MessageHandler,
+	fileHandler *handler.FileHandler,
 ) *gin.Engine {
 	r := gin.Default()
 
@@ -45,6 +46,12 @@ func SetupRouter(
 		messageRoutes.DELETE("/:id", messageHandler.DeleteMessage)
 		messageRoutes.GET("/unseen/:user_id", messageHandler.GetUnseenCount)
 	}
+
+	// Upload route
+	r.POST("/upload", fileHandler.Upload)
+
+	// Serve uploaded files statically
+	r.Static("/uploads", "./uploads")
 
 	return r
 }

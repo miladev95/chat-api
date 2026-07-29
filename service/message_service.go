@@ -17,17 +17,28 @@ type MessageService interface {
 }
 
 type messageService struct {
-	msgRepo repository.MessageRepository
+	msgRepo   repository.MessageRepository
+	groupRepo repository.GroupRepository
 }
 
-func NewMessageService(msgRepo repository.MessageRepository) MessageService {
-	return &messageService{msgRepo: msgRepo}
+func NewMessageService(msgRepo repository.MessageRepository, groupRepo repository.GroupRepository) MessageService {
+	return &messageService{msgRepo: msgRepo, groupRepo: groupRepo}
 }
 
 // SendMessage stores a new message after validating the conversation target.
 func (s *messageService) SendMessage(msg *models.Message) error {
 	if msg.ReceiverID == nil && msg.GroupID == nil {
 		return ErrInvalidConversation
+	}
+	// For group messages, verify the sender is a member of the group
+	if msg.GroupID != nil {
+		isMember, err := s.groupRepo.IsMember(*msg.GroupID, msg.SenderID)
+		if err != nil {
+			return err
+		}
+		if !isMember {
+			return ErrNotGroupMember
+		}
 	}
 	msg.CreatedAt = time.Now()
 	return s.msgRepo.CreateMessage(msg)
@@ -53,5 +64,9 @@ func (s *messageService) GetUnseenCount(userID uint) (map[string]interface{}, er
 	return s.msgRepo.GetUnseenCountDetailed(userID)
 }
 
-// ErrInvalidConversation signals a missing conversation target.
-var ErrInvalidConversation = errors.New("either receiverID or groupID must be provided")
+var (
+	// ErrInvalidConversation signals a missing conversation target.
+	ErrInvalidConversation = errors.New("either receiverID or groupID must be provided")
+	// ErrNotGroupMember signals the sender is not a member of the target group.
+	ErrNotGroupMember = errors.New("sender is not a member of this group")
+)

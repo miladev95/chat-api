@@ -80,41 +80,63 @@ func TestGroupHandler_CreateGroup(t *testing.T) {
 
 func TestGroupHandler_DeleteGroup(t *testing.T) {
 	t.Run("deleted successfully", func(t *testing.T) {
+		var capturedReqID uint
 		svc := &mockGroupSvc{
-			deleteGroupFn: func(id uint) error {
+			deleteGroupFn: func(id, requesterID uint) error {
+				capturedReqID = requesterID
 				return nil
 			},
 		}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/1", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, uint(1), capturedReqID)
 	})
 
 	t.Run("invalid group id", func(t *testing.T) {
 		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/abc", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/abc", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("service error", func(t *testing.T) {
+	t.Run("missing requester_id", func(t *testing.T) {
+		svc := &mockGroupSvc{}
+		r := setupGroupRoutes(svc)
+
+		body := `{}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("DELETE", "/groups/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("forbidden error", func(t *testing.T) {
 		svc := &mockGroupSvc{
-			deleteGroupFn: func(id uint) error {
+			deleteGroupFn: func(id, requesterID uint) error {
 				return assert.AnError
 			},
 		}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/1", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -122,17 +144,17 @@ func TestGroupHandler_DeleteGroup(t *testing.T) {
 }
 
 func TestGroupHandler_AddMember(t *testing.T) {
-	t.Run("added successfully with role", func(t *testing.T) {
+	t.Run("owner adds member successfully", func(t *testing.T) {
 		var capturedRole string
 		svc := &mockGroupSvc{
-			addMemberFn: func(gid, uid uint, role string) error {
+			addMemberFn: func(gid, uid uint, role string, requesterID uint) error {
 				capturedRole = role
 				return nil
 			},
 		}
 		r := setupGroupRoutes(svc)
 
-		body := `{"user_id":10,"role":"admin"}`
+		body := `{"requester_id":1,"user_id":10,"role":"admin"}`
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("POST", "/groups/1/members", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -146,7 +168,7 @@ func TestGroupHandler_AddMember(t *testing.T) {
 		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
-		body := `{"user_id":10}`
+		body := `{"requester_id":1,"user_id":10}`
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("POST", "/groups/abc/members", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -159,7 +181,7 @@ func TestGroupHandler_AddMember(t *testing.T) {
 		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
-		body := `{}`
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("POST", "/groups/1/members", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -168,12 +190,8 @@ func TestGroupHandler_AddMember(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("service error", func(t *testing.T) {
-		svc := &mockGroupSvc{
-			addMemberFn: func(gid, uid uint, role string) error {
-				return assert.AnError
-			},
-		}
+	t.Run("missing requester_id", func(t *testing.T) {
+		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
 		body := `{"user_id":10}`
@@ -182,32 +200,39 @@ func TestGroupHandler_AddMember(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
 func TestGroupHandler_RemoveMember(t *testing.T) {
 	t.Run("removed successfully", func(t *testing.T) {
+		var capturedReqID uint
 		svc := &mockGroupSvc{
-			removeMemberFn: func(gid, uid uint) error {
+			removeMemberFn: func(gid, uid uint, requesterID uint) error {
+				capturedReqID = requesterID
 				return nil
 			},
 		}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/1/members/10", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/1/members/10", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, uint(1), capturedReqID)
 	})
 
 	t.Run("invalid group id", func(t *testing.T) {
 		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/abc/members/10", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/abc/members/10", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -217,26 +242,26 @@ func TestGroupHandler_RemoveMember(t *testing.T) {
 		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
+		body := `{"requester_id":1}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/1/members/xyz", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/1/members/xyz", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("service error", func(t *testing.T) {
-		svc := &mockGroupSvc{
-			removeMemberFn: func(gid, uid uint) error {
-				return assert.AnError
-			},
-		}
+	t.Run("missing requester_id", func(t *testing.T) {
+		svc := &mockGroupSvc{}
 		r := setupGroupRoutes(svc)
 
+		body := `{}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("DELETE", "/groups/1/members/10", nil)
+		req, _ := http.NewRequest("DELETE", "/groups/1/members/10", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 

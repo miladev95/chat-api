@@ -29,12 +29,14 @@ func (m *mockUserRepo) GetAllUsers() ([]models.User, error) {
 // --- GroupRepository mock ---
 
 type mockGroupRepo struct {
-	createGroupFn  func(group *models.Group) error
-	getGroupByIDFn func(groupID uint) (*models.Group, error)
-	addMemberFn    func(groupID, userID uint, role string) error
-	removeMemberFn func(groupID, userID uint) error
-	getMembersFn   func(groupID uint) ([]models.GroupMember, error)
-	deleteGroupFn  func(groupID uint) error
+	createGroupFn   func(group *models.Group) error
+	getGroupByIDFn  func(groupID uint) (*models.Group, error)
+	addMemberFn     func(groupID, userID uint, role string) error
+	removeMemberFn  func(groupID, userID uint) error
+	getMembersFn    func(groupID uint) ([]models.GroupMember, error)
+	deleteGroupFn   func(groupID uint) error
+	isMemberFn      func(groupID, userID uint) (bool, error)
+	getMemberRoleFn func(groupID, userID uint) (string, error)
 }
 
 func (m *mockGroupRepo) CreateGroup(group *models.Group) error {
@@ -59,6 +61,14 @@ func (m *mockGroupRepo) GetMembers(groupID uint) ([]models.GroupMember, error) {
 
 func (m *mockGroupRepo) DeleteGroup(groupID uint) error {
 	return m.deleteGroupFn(groupID)
+}
+
+func (m *mockGroupRepo) IsMember(groupID, userID uint) (bool, error) {
+	return m.isMemberFn(groupID, userID)
+}
+
+func (m *mockGroupRepo) GetMemberRole(groupID, userID uint) (string, error) {
+	return m.getMemberRoleFn(groupID, userID)
 }
 
 // --- MessageRepository mock ---

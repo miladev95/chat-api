@@ -14,6 +14,8 @@ type GroupRepository interface {
 	RemoveMember(groupID, userID uint) error
 	GetMembers(groupID uint) ([]models.GroupMember, error)
 	DeleteGroup(groupID uint) error
+	IsMember(groupID, userID uint) (bool, error)
+	GetMemberRole(groupID, userID uint) (string, error)
 }
 
 type groupRepo struct {
@@ -66,4 +68,23 @@ func (r *groupRepo) DeleteGroup(groupID uint) error {
 
 func (r *groupRepo) RemoveMember(groupID, userID uint) error {
 	return r.db.Where("group_id = ? AND user_id = ?", groupID, userID).Delete(&models.GroupMember{}).Error
+}
+
+func (r *groupRepo) IsMember(groupID, userID uint) (bool, error) {
+	var count int64
+	if err := r.db.Model(&models.GroupMember{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *groupRepo) GetMemberRole(groupID, userID uint) (string, error) {
+	var member models.GroupMember
+	if err := r.db.Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		return "", err
+	}
+	return member.Role, nil
 }

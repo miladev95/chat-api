@@ -42,8 +42,19 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
 		return
 	}
-	if err := h.groupService.DeleteGroup(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var req struct {
+		RequesterID uint `json:"requester_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.groupService.DeleteGroup(uint(id), req.RequesterID); err != nil {
+		code := http.StatusInternalServerError
+		if err == service.ErrNotMember || err == service.ErrNotOwner {
+			code = http.StatusForbidden
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "group deleted"})
@@ -57,18 +68,20 @@ func (h *GroupHandler) AddMember(c *gin.Context) {
 		return
 	}
 	var req struct {
-		UserID uint   `json:"user_id" binding:"required"`
-		Role   string `json:"role"`
+		RequesterID uint   `json:"requester_id" binding:"required"`
+		UserID      uint   `json:"user_id" binding:"required"`
+		Role        string `json:"role"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Role == "" {
-		req.Role = "member"
-	}
-	if err := h.groupService.AddMember(uint(groupID), req.UserID, req.Role); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.groupService.AddMember(uint(groupID), req.UserID, req.Role, req.RequesterID); err != nil {
+		code := http.StatusInternalServerError
+		if err == service.ErrNotMember || err == service.ErrInsufficientRole || err == service.ErrNotOwner {
+			code = http.StatusForbidden
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "member added"})
@@ -86,8 +99,19 @@ func (h *GroupHandler) RemoveMember(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
-	if err := h.groupService.RemoveMember(uint(groupID), uint(userID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var req struct {
+		RequesterID uint `json:"requester_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.groupService.RemoveMember(uint(groupID), uint(userID), req.RequesterID); err != nil {
+		code := http.StatusInternalServerError
+		if err == service.ErrNotMember || err == service.ErrInsufficientRole || err == service.ErrNotOwner {
+			code = http.StatusForbidden
+		}
+		c.JSON(code, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "member removed"})
