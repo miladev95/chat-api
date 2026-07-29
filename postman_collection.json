@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Chat Application API",
-    "description": "Complete API collection for testing the Chat Application",
+    "description": "Complete API collection for testing the Chat Application.\n\nEndpoints: Health, Users, Groups (with role-based auth), Messages (text/image/file), File Upload, and Combined File Message upload.\n\nBase URL variable: {{base_url}} defaults to http://localhost:8080",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -12,12 +12,8 @@
         "header": [],
         "url": {
           "raw": "{{base_url}}/health",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "health"
-          ]
+          "host": ["{{base_url}}"],
+          "path": ["health"]
         }
       }
     },
@@ -28,24 +24,15 @@
           "name": "Create User",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"username\": \"john_doe\",\n  \"email\": \"john@example.com\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["users"]
             }
           }
         },
@@ -56,12 +43,8 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["users"]
             }
           }
         },
@@ -72,13 +55,8 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users",
-                "1"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["users", "1"]
             }
           }
         }
@@ -86,29 +64,21 @@
     },
     {
       "name": "Groups",
+      "description": "Group management with role-based authorization. All mutating endpoints require `requester_id` to identify who is performing the action.\n\nRoles: owner, admin, member.\n- Only owners can delete groups and assign owner/admin roles.\n- Owners and admins can add/remove members.\n- Nobody can remove the owner.",
       "item": [
         {
           "name": "Create Group",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Project Team\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/groups",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "groups"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["groups"]
             }
           }
         },
@@ -116,26 +86,15 @@
           "name": "Add Member to Group",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": 1,\n  \"role\": \"member\"\n}"
+              "raw": "{\n  \"requester_id\": 1,\n  \"user_id\": 2,\n  \"role\": \"member\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/groups/1/members",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "groups",
-                "1",
-                "members"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1", "members"]
             }
           }
         },
@@ -146,14 +105,8 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/groups/1/members",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "groups",
-                "1",
-                "members"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1", "members"]
             }
           }
         },
@@ -161,18 +114,15 @@
           "name": "Remove Member from Group",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requester_id\": 1\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/groups/1/members/1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "groups",
-                "1",
-                "members",
-                "1"
-              ]
+              "raw": "{{base_url}}/groups/1/members/2",
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1", "members", "2"]
             }
           }
         },
@@ -180,16 +130,15 @@
           "name": "Delete Group",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requester_id\": 1\n}"
+            },
             "url": {
               "raw": "{{base_url}}/groups/1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "groups",
-                "1"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1"]
             }
           }
         }
@@ -202,24 +151,15 @@
           "name": "Send Direct Message",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"sender_id\": 1,\n  \"receiver_id\": 2,\n  \"type\": \"text\",\n  \"content\": \"Hello, how are you?\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/messages",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages"]
             }
           }
         },
@@ -227,75 +167,70 @@
           "name": "Send Group Message",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"sender_id\": 1,\n  \"group_id\": 1,\n  \"type\": \"text\",\n  \"content\": \"Hello team!\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/messages",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages"]
             }
           }
         },
         {
-          "name": "Send Image Message",
+          "name": "Send Image Message (with file_id)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"sender_id\": 1,\n  \"receiver_id\": 2,\n  \"type\": \"image\",\n  \"content\": \"Check out this image\",\n  \"file_id\": 1\n}"
             },
             "url": {
               "raw": "{{base_url}}/messages",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages"]
             }
           }
         },
         {
-          "name": "Send File Message",
+          "name": "Send File Message (with file_id)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"sender_id\": 1,\n  \"receiver_id\": 2,\n  \"type\": \"file\",\n  \"content\": \"Important document attached\",\n  \"file_id\": 2\n}"
             },
             "url": {
               "raw": "{{base_url}}/messages",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages"]
             }
+          }
+        },
+        {
+          "name": "Upload File + Send Message",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": "/path/to/file.png"},
+                {"key": "sender_id", "value": "1"},
+                {"key": "receiver_id", "value": "2"},
+                {"key": "content", "value": "Check out this file!"}
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/messages/upload",
+              "host": ["{{base_url}}"],
+              "path": ["messages", "upload"]
+            },
+            "description": "Upload a file and send it as a chat message in one request (multipart form data).\n\nFields:\n- file: The file to upload (required)\n- sender_id: ID of the sender (required, numeric)\n- receiver_id: ID of the receiver for direct messages\n- group_id: ID of the group for group messages\n- content: Optional text message\n\nAuto-detects message type: image/* Content-Type becomes type \"image\", everything else becomes type \"file\"."
           }
         },
         {
@@ -305,25 +240,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/messages?receiver_id=2&limit=50&offset=0",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ],
+              "host": ["{{base_url}}"],
+              "path": ["messages"],
               "query": [
-                {
-                  "key": "receiver_id",
-                  "value": "2"
-                },
-                {
-                  "key": "limit",
-                  "value": "50"
-                },
-                {
-                  "key": "offset",
-                  "value": "0"
-                }
+                {"key": "receiver_id", "value": "2"},
+                {"key": "limit", "value": "50"},
+                {"key": "offset", "value": "0"}
               ]
             }
           }
@@ -335,25 +257,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/messages?group_id=1&limit=50&offset=0",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages"
-              ],
+              "host": ["{{base_url}}"],
+              "path": ["messages"],
               "query": [
-                {
-                  "key": "group_id",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "50"
-                },
-                {
-                  "key": "offset",
-                  "value": "0"
-                }
+                {"key": "group_id", "value": "1"},
+                {"key": "limit", "value": "50"},
+                {"key": "offset", "value": "0"}
               ]
             }
           }
@@ -362,26 +271,15 @@
           "name": "Mark Message as Seen",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"user_id\": 1\n}"
             },
             "url": {
               "raw": "{{base_url}}/messages/1/seen",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages",
-                "1",
-                "seen"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages", "1", "seen"]
             }
           }
         },
@@ -392,13 +290,8 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/messages/1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages",
-                "1"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["messages", "1"]
             }
           }
         },
@@ -409,16 +302,34 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/messages/unseen/1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "messages",
-                "unseen",
-                "1"
+              "host": ["{{base_url}}"],
+              "path": ["messages", "unseen", "1"]
+            },
+            "description": "Get count of unseen direct and group messages for a user, grouped by sender and group.\n\nResponse format:\n{\n  \"direct_messages\": [\n    { \"user_id\": 1, \"username\": \"john_doe\", \"unseen_count\": 5 },\n    { \"user_id\": 2, \"username\": \"jane_doe\", \"unseen_count\": 3 }\n  ],\n  \"group_messages\": [\n    { \"group_id\": 1, \"group_name\": \"Project Team\", \"unseen_count\": 4 },\n    { \"group_id\": 2, \"group_name\": \"General Chat\", \"unseen_count\": 2 }\n  ],\n  \"total\": 14\n}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "File Upload",
+      "item": [
+        {
+          "name": "Upload File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": "/path/to/file.png"}
               ]
             },
-            "description": "Get count of unseen direct and group messages for a user, grouped by sender and group.\n\nResponse format:\n{\n  \"direct_messages\": [\n    {\n      \"user_id\": 1,\n      \"username\": \"john_doe\",\n      \"unseen_count\": 5\n    },\n    {\n      \"user_id\": 2,\n      \"username\": \"jane_doe\",\n      \"unseen_count\": 3\n    }\n  ],\n  \"group_messages\": [\n    {\n      \"group_id\": 1,\n      \"group_name\": \"Project Team\",\n      \"unseen_count\": 4\n    },\n    {\n      \"group_id\": 2,\n      \"group_name\": \"General Chat\",\n      \"unseen_count\": 2\n    }\n  ],\n  \"total\": 14\n}"
+            "url": {
+              "raw": "{{base_url}}/upload",
+              "host": ["{{base_url}}"],
+              "path": ["upload"]
+            },
+            "description": "Upload a file and get its metadata. The returned `id` can be used as `file_id` when sending a message.\n\nResponse:\n{\n  \"id\": 1,\n  \"url\": \"/uploads/abc123.png\",\n  \"size\": 1024,\n  \"type\": \"image/png\",\n  \"created_at\": \"...\",\n  \"updated_at\": \"...\"\n}"
           }
         }
       ]
