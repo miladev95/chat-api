@@ -2,7 +2,7 @@
 
 ## 📋 Project Overview
 
-A modern, scalable **Chat Application API** built with Go. It provides RESTful endpoints for user management, group messaging (with role-based access), direct messaging, message read receipts, file uploads, and Docker deployment.
+A modern, scalable **Chat Application API** built with Go. It provides RESTful endpoints for user management, group messaging (with role-based access), direct messaging, message read receipts, file uploads, rate limiting, and Docker deployment.
 
 **Purpose**: Backend service for a chat application.
 
@@ -13,14 +13,15 @@ A modern, scalable **Chat Application API** built with Go. It provides RESTful e
 ### Layered Pattern
 
 ```
-Routes → Handlers → Services → Repositories → Database (PostgreSQL/GORM)
+Routes → [Middleware] → Handlers → Services → Repositories → Database (PostgreSQL/GORM)
 ```
 
 Tests use **SQLite in-memory** for isolation (see Testing Notes).
 
 | Layer | Directory | Responsibility |
 |---|---|---|
-| **Routes** | `routes/routes.go` | HTTP endpoint definitions, route grouping |
+| **Routes** | `routes/routes.go` | HTTP endpoint definitions, route grouping, middleware application |
+| **Middleware** | `middleware/*.go` | Cross-cutting concerns: rate limiting, authentication (future) |
 | **Handlers** | `handler/*.go` | Request parsing, response formatting, input validation |
 | **Services** | `service/*.go` | Business logic, validation rules, authorization checks |
 | **Repositories** | `repository/*.go` | Data access, CRUD operations via GORM |
@@ -33,11 +34,23 @@ All layers are wired together in **`main.go`** using constructor injection:
 
 ```go
 dbConn := db.InitDB()
+
 userRepo := repository.NewUserRepository(dbConn)
+groupRepo := repository.NewGroupRepository(dbConn)
+msgRepo := repository.NewMessageRepository(dbConn)
+fileRepo := repository.NewFileRepository(dbConn)
+
 userSvc := service.NewUserService(userRepo)
+groupSvc := service.NewGroupService(groupRepo)
+msgSvc := service.NewMessageService(msgRepo, groupRepo)
+fileSvc := service.NewFileService(fileRepo, "./uploads")
+
 userHandler := handler.NewUserHandler(userSvc)
+groupHandler := handler.NewGroupHandler(groupSvc)
+messageHandler := handler.NewMessageHandler(msgSvc, fileSvc)
+fileHandler := handler.NewFileHandler(fileSvc)
+
 r := routes.SetupRouter(userHandler, groupHandler, messageHandler, fileHandler)
-r.Run(":8080")
 ```
 
 ---
@@ -60,9 +73,11 @@ r.Run(":8080")
 
 ```
 chat/
-├── main.go                      # Entry point — wires dependencies, starts server
+├── main.go                      # Entry point — wires deps, starts server with graceful shutdown
 ├── go.mod                       # Module: "chat", Go 1.22, PostgreSQL + SQLite drivers
 ├── go.sum                       # Dependency checksums
+├── AGENT.md                     # AI agent guide (untracked)
+├── STRUCTURE.md                 # This file — detailed project documentation
 ├── README.md                    # Full documentation
 ├── postman_collection.json      # Postman collection for testing
 ├── .golangci.yml                # Lint configuration
@@ -79,6 +94,10 @@ chat/
 │
 ├── db/
 │   └── db.go                    # PostgreSQL with env-based config, AutoMigrate all models
+│
+├── middleware/                   # Cross-cutting Gin middleware
+│   ├── rate_limiter.go          # Per-IP sliding window rate limiter (100 req/min general, 10 req/min upload)
+│   └── rate_limiter_test.go     # 6 test cases for rate limiter
 │
 ├── repository/                  # Data access layer (interfaces + implementations)
 │   ├── user_repository.go       # UserRepository
@@ -102,9 +121,9 @@ chat/
 │
 ├── handler/                     # HTTP handlers (Gin context)
 │   ├── user_handler.go          # UserHandler — POST/GET /users, GET /users/:id
-│   ├── group_handler.go         # GroupHandler — CRUD + member mgmt (requester_id checks)
-│   ├── message_handler.go       # MessageHandler — send/get/delete/seen/unseen + file upload
-│   ├── file_handler.go          # FileHandler — POST /upload (multipart)
+│   ├── group_handler.go         # GroupHandler — CRUD + member mgmt (requester_id checks, role validation)
+│   ├── message_handler.go       # MessageHandler — send/get/delete/seen/unseen + file upload (type/content validation)
+│   ├── file_handler.go          # FileHandler — POST /upload (multipart, 50MB max)
 │   ├── mock_service_test.go     # Mock services for handler tests
 │   ├── user_handler_test.go
 │   ├── group_handler_test.go
@@ -112,7 +131,7 @@ chat/
 │   └── file_handler_test.go
 │
 └── routes/
-    └── routes.go                # SetupRouter() — defines all routes + static file serving
+    └── routes.go                # SetupRouter() — defines all routes, rate limiter middleware, static file serving
 ```
 
 ---
@@ -143,7 +162,7 @@ chat/
 |---|---|---|
 | group_id | uint | PK (composite) |
 | user_id | uint | PK (composite) |
-| role | string | size:50, NOT NULL, default:'member' (owner|admin|member) |
+| role | string | size:50, NOT NULL, default:'member' (owner\|admin\|member) |
 | created_at/updated_at | time.Time | auto |
 
 ### Messages
@@ -153,7 +172,7 @@ chat/
 | sender_id | uint | NOT NULL, FK → User |
 | receiver_id | *uint | nullable — direct message target |
 | group_id | *uint | nullable — group message target |
-| type | MessageType (string) | size:50, NOT NULL (text|image|file) |
+| type | MessageType (string) | size:50, NOT NULL (text\|image\|file) |
 | content | string | type:text |
 | file_id | *uint | nullable, FK → File |
 | created_at/updated_at/deleted_at | — | standard GORM timestamps |
@@ -182,19 +201,19 @@ chat/
 
 Base URL: `http://localhost:8080`
 
-### Health
+### Health — *No rate limit*
 | Method | Path | Description |
 |---|---|---|
 | GET | `/health` | Returns `{"status": "ok"}` |
 
-### Users
+### Users — *100 req/min*
 | Method | Path | Description |
 |---|---|---|
-| POST | `/users` | Create user (body: `username`, `email` — email validated by Gin binding) |
+| POST | `/users` | Create user (body: `username`, `email`) |
 | GET | `/users` | List all users |
 | GET | `/users/:id` | Get user by ID |
 
-### Groups
+### Groups — *100 req/min*
 | Method | Path | Description |
 |---|---|---|
 | POST | `/groups` | Create group (body: `name`) |
@@ -203,7 +222,7 @@ Base URL: `http://localhost:8080`
 | DELETE | `/groups/:id/members/:user_id` | Remove member (body: `requester_id`; admin/owner only, cannot remove owner) |
 | GET | `/groups/:id/members` | List group members |
 
-### Messages
+### Messages — *100 req/min*
 | Method | Path | Description |
 |---|---|---|
 | POST | `/messages` | Send message (body: `sender_id`, `receiver_id` or `group_id`, `type`, `content`, `file_id`) |
@@ -213,10 +232,10 @@ Base URL: `http://localhost:8080`
 | DELETE | `/messages/:id` | Soft-delete message |
 | GET | `/messages/unseen/:user_id` | Get unseen counts grouped by sender + group |
 
-### File Upload
+### File Upload — *10 req/min (stricter)*
 | Method | Path | Description |
 |---|---|---|
-| POST | `/upload` | Upload file (multipart: `file`). Returns file metadata with `id`, `url`, `size`, `type` |
+| POST | `/upload` | Upload file (multipart: `file`, max 50MB). Returns file metadata with `id`, `url`, `size`, `type` |
 | GET | `/uploads/*path` | Static file serving (serves uploaded files) |
 
 ### Unseen Count Response Format
@@ -286,10 +305,36 @@ All conversation queries use `limit` (default 50) and `offset` (default 0) query
 - HTTP 400: Bad request (validation errors, invalid conversation target)
 - HTTP 403: Forbidden (authorization failures)
 - HTTP 404: Resource not found
+- HTTP 429: Too many requests (rate limit exceeded)
 - HTTP 500: Internal server errors
 - All errors returned as `{"error": "<message>"}`
 
-### 8. Thread Safety
+### 8. Graceful Shutdown
+`main.go` uses `http.Server` with signal handling for graceful shutdown:
+- Listens for `SIGINT` (Ctrl+C) and `SIGTERM` (Docker)
+- 10-second timeout allows in-flight requests to finish
+- Database connection is closed after the server shuts down
+
+### 9. Rate Limiting
+Per-IP sliding window rate limiter (`middleware/rate_limiter.go`):
+- **100 req/min** for `/users`, `/groups`, `/messages`
+- **10 req/min** for `/upload` (file uploads)
+- **No limit** for `/health` and static `/uploads/*`
+- Returns HTTP 429 with JSON error when exceeded
+- Uses `sync.RWMutex` + `map[string][]time.Time` for tracking
+- Periodic cleanup goroutine purges stale entries
+
+### 10. Input Validation (Handler Layer)
+All JSON endpoints use Gin `binding` tags for required fields. Additional handler-level validation:
+- **Message type**: Must be one of `text`, `image`, or `file` (enum check)
+- **Message content**: Required when `type=text`
+- **File ID**: Required when `type=image` or `type=file`
+- **Role**: Must be one of `owner`, `admin`, or `member` (if provided in `AddMember`)
+- **File size**: Max 50MB via `http.MaxBytesReader`
+- **Query params**: Invalid `receiver_id`/`group_id` return 400 (not silently ignored)
+- **Conversation target**: `GetConversation` and `SendFileMessage` validate at least one target is provided
+
+### 11. Thread Safety
 The package-level `DB` variable in `db/db.go` is read after initialization only.
 
 ---
@@ -302,16 +347,17 @@ The package-level `DB` variable in `db/db.go` is read after initialization only.
 2. **Repository** — Add interface + implementation in `repository/`
 3. **Service** — Add interface + implementation in `service/`
 4. **Handler** — Add Gin handler in `handler/`
-5. **Routes** — Register endpoint in `routes/routes.go`
-6. **Migrations** — Add model to `db.AutoMigrate()` in `db/db.go`
-7. **Tests** — Add test files for each layer using established patterns
+5. **Middleware** — Add any cross-cutting middleware in `middleware/`
+6. **Routes** — Register endpoint in `routes/routes.go`
+7. **Migrations** — Add model to `db.AutoMigrate()` in `db/db.go`
+8. **Tests** — Add test files for each layer using established patterns
 
 ### Running Locally (requires PostgreSQL)
 ```bash
 # Set env vars (or use defaults):
 export DB_HOST=localhost DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=chat
 
-go run main.go   # Starts on :8080
+go run main.go   # Starts on :8080 with graceful shutdown
 ```
 
 ### Running with Docker
@@ -324,6 +370,7 @@ docker compose up --build   # Starts PostgreSQL + app
 go test ./...          # All tests (uses SQLite in-memory, no DB required)
 go test ./... -v       # Verbose
 go test ./... -cover   # Coverage
+go test ./middleware/...   # Middleware tests only
 ```
 
 ### Database (PostgreSQL)
@@ -352,10 +399,13 @@ go mod tidy
 | email | Required, valid email format (Gin `binding:"email"`), unique |
 | group name | Required, unique |
 | sender_id | Required for messages |
-| message type | Required (`text`, `image`, or `file`) |
-| receiver_id / group_id | Exactly one must be set (validated in `SendMessage`) |
+| message type | Required, must be `text`, `image`, or `file` (enum check at handler) |
+| message content | Required when `type=text` |
+| file_id | Required when `type=image` or `type=file` |
+| receiver_id / group_id | Exactly one must be set (service layer) + handler validates at least one |
 | requester_id | Required for group management endpoints |
-| file | Required for `/upload` and `/messages/upload` |
+| role (group member) | Must be `owner`, `admin`, or `member` if provided |
+| file | Required for `/upload` and `/messages/upload`, max 50MB |
 
 ---
 
@@ -363,13 +413,14 @@ go mod tidy
 
 Tests use **SQLite in-memory** (`:memory:` with `MaxOpenConns(1)`) — no PostgreSQL needed.
 
-### Test Coverage by Layer (100+ total subtests)
+### Test Coverage by Layer (130+ total subtests)
 
 | Package | Test Files | Approach |
 |---|---|---|
-| `repository/` | 4 test files, 30 subtests | Real SQLite in-memory, full CRUD + edge cases |
+| `repository/` | 4 test files, 40 subtests | Real SQLite in-memory, full CRUD + edge cases |
 | `service/` | 3 test files, 29 subtests | Mocked repositories via function-field mocks |
-| `handler/` | 4 test files, ~50 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
+| `handler/` | 5 test files, ~55 subtests | Mocked services via function-field mocks, `httptest.NewRecorder()` |
+| `middleware/` | 1 test file, 6 subtests | Real Gin engine with test routes, `httptest.NewRecorder()` |
 
 ### Service Test Mock Pattern
 ```go
@@ -393,6 +444,19 @@ func setupMessageRoutes(svc *mockMsgSvc, fileSvc *mockFileSvc) *gin.Engine {
 }
 ```
 Tests send HTTP requests through Gin's test router and assert on response code + body.
+
+### Middleware Test Pattern
+```go
+func setupTestRoute(limiter gin.HandlerFunc) *gin.Engine {
+    gin.SetMode(gin.TestMode)
+    r := gin.New()
+    r.GET("/test", limiter, func(c *gin.Context) {
+        c.JSON(http.StatusOK, gin.H{"status": "ok"})
+    })
+    return r
+}
+```
+Middleware is tested by wrapping a simple downstream handler and asserting behavior (allows, blocks, resets, etc.).
 
 ---
 
@@ -423,6 +487,7 @@ services:
 ```
 - Persistent volumes: `pgdata` (database), `uploads` (files)
 - `GIN_MODE=release` for production
+- `docker stop` sends SIGTERM → app handles graceful shutdown
 
 ---
 
@@ -430,6 +495,7 @@ services:
 
 - **This is a Go module** named `chat` — all imports use `chat/...` prefix.
 - **Gin context** (`*gin.Context`) is used for all HTTP handlers — use `c.ShouldBindJSON` for JSON, `c.PostForm`/`c.Request.FormFile` for multipart.
+- **Rate limiter is per-IP** — `c.ClientIP()` is used for tracking. Behind a reverse proxy, you may need to trust proxy headers (`r.ForwardedByClientIP` or `r.SetTrustedProxies`).
 - **GORM** is used for all database operations — `Preload` for eager loading, `Clauses(clause.OnConflict{})` for upsert.
 - **No authentication middleware** exists yet — `requester_id` is passed in request bodies as a placeholder.
 - **No WebSocket** support — this is a REST-only API.
@@ -437,6 +503,23 @@ services:
 - **When modifying existing code**, look at **both the interface and the implementation** in the same file (repository, service layers).
 - **Mock files** are in the same package as tests (suffixed `_test.go`) and use function-field mocks, not `testify/mock`.
 - **Tests use SQLite in-memory**, not PostgreSQL — `repository/setup_test.go` provides the `setupTestDB()` helper.
-- **File uploads** go to `./uploads/` directory (served statically at `/uploads/*`).
+- **File uploads** go to `./uploads/` directory (served statically at `/uploads/*`), max 50MB.
+- **Graceful shutdown** — `main.go` uses `http.Server` with `signal.Notify` for SIGINT/SIGTERM.
+- **Middleware is applied per-route-group** — define middleware in `routes/routes.go` via `r.Group("/path", middlewareFn)`.
 
 ---
+
+## 📜 Git History (10 commits ahead of origin/master)
+
+| Commit | Description |
+|---|---|
+| `2e17b90` | Phase 1: Service tests, handler tests, lint config, error fixes |
+| `7b07ea1` | Phase 2: Authorization checks and file upload endpoint |
+| `48d62c5` | Switch database from SQLite to PostgreSQL |
+| `0ac35b1` | Add Docker setup with multi-stage build and docker-compose |
+| `cf524fd` | Add combined file upload + message sending endpoint |
+| `ead2ebf` | Add graceful shutdown with signal handling |
+| `a2652a9` | Add STRUCTURE.md with comprehensive project documentation |
+| `4294b12` | Add input validation across all handler endpoints |
+| `e011299` | Add per-IP sliding window rate limiter middleware |
+| `400fe59` | Add unit tests for rate limiter middleware |
