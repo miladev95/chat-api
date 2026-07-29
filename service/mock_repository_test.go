@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"chat/models"
+	"chat/repository"
 )
 
 // --- UserRepository mock ---
@@ -89,19 +90,34 @@ func (m *mockGroupRepo) GetMemberRole(groupID, userID uint) (string, error) {
 // --- MessageRepository mock ---
 
 type mockMessageRepo struct {
-	createMessageFn              func(msg *models.Message) error
-	getMessagesByConversationFn  func(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
-	markMessageSeenFn            func(messageID, userID uint) error
-	deleteMessageFn              func(messageID uint) error
-	getUnseenCountDetailedFn     func(userID uint) (map[string]interface{}, error)
+	createMessageFn             func(msg *models.Message) error
+	getMessageByIDFn            func(messageID uint) (*models.Message, error)
+	getMessagesByConversationFn func(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
+	getConversationsFn          func(userID uint) ([]repository.ConversationItem, error)
+	updateMessageContentFn      func(messageID uint, content string) error
+	markMessageSeenFn           func(messageID, userID uint) error
+	deleteMessageFn             func(messageID uint) error
+	getUnseenCountDetailedFn    func(userID uint) (map[string]interface{}, error)
 }
 
 func (m *mockMessageRepo) CreateMessage(msg *models.Message) error {
 	return m.createMessageFn(msg)
 }
 
+func (m *mockMessageRepo) GetMessageByID(messageID uint) (*models.Message, error) {
+	return m.getMessageByIDFn(messageID)
+}
+
 func (m *mockMessageRepo) GetMessagesByConversation(receiverID, groupID *uint, limit, offset int) ([]models.Message, error) {
 	return m.getMessagesByConversationFn(receiverID, groupID, limit, offset)
+}
+
+func (m *mockMessageRepo) GetConversations(userID uint) ([]repository.ConversationItem, error) {
+	return m.getConversationsFn(userID)
+}
+
+func (m *mockMessageRepo) UpdateMessageContent(messageID uint, content string) error {
+	return m.updateMessageContentFn(messageID, content)
 }
 
 func (m *mockMessageRepo) MarkMessageSeen(messageID, userID uint) error {

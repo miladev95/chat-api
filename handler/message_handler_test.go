@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"chat/models"
+	"chat/repository"
 	"chat/service"
 
 	"github.com/gin-gonic/gin"
@@ -25,9 +26,11 @@ func setupMessageRoutes(svc *mockMsgSvc, fileSvc *mockFileSvc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := NewMessageHandler(svc, fileSvc)
 	r := gin.New()
+	r.GET("/conversations", h.GetConversations)
 	r.POST("/messages", h.SendMessage)
 	r.POST("/messages/upload", h.SendFileMessage)
 	r.GET("/messages", h.GetConversation)
+	r.PUT("/messages/:id", h.EditMessage)
 	r.POST("/messages/:id/seen", h.MarkSeen)
 	r.DELETE("/messages/:id", h.DeleteMessage)
 	r.GET("/messages/unseen/:user_id", h.GetUnseenCount)
@@ -271,6 +274,145 @@ func TestMessageHandler_GetUnseenCount(t *testing.T) {
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func TestMessageHandler_GetConversations(t *testing.T) {
+	t.Run("returns conversations", func(t *testing.T) {
+		svc := &mockMsgSvc{
+			getConversationsFn: func(uid uint) ([]repository.ConversationItem, error) {
+				return []repository.ConversationItem{
+					{UserID: 2, Username: "bob", UnseenCount: 3},
+				}, nil
+			},
+		}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/conversations?user_id=1", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp []repository.ConversationItem
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.Len(t, resp, 1)
+		assert.Equal(t, uint(2), resp[0].UserID)
+	})
+
+	t.Run("missing user_id", func(t *testing.T) {
+		svc := &mockMsgSvc{}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/conversations", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid user_id", func(t *testing.T) {
+		svc := &mockMsgSvc{}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/conversations?user_id=abc", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		svc := &mockMsgSvc{
+			getConversationsFn: func(uid uint) ([]repository.ConversationItem, error) {
+				return nil, assert.AnError
+			},
+		}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/conversations?user_id=1", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func TestMessageHandler_EditMessage(t *testing.T) {
+	t.Run("updated successfully", func(t *testing.T) {
+		var capturedContent string
+		svc := &mockMsgSvc{
+			editMessageFn: func(mid, sid uint, content string) error {
+				capturedContent = content
+				return nil
+			},
+		}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		body := `{"sender_id":1,"content":"Edited message"}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/messages/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "Edited message", capturedContent)
+	})
+
+	t.Run("invalid message id", func(t *testing.T) {
+		svc := &mockMsgSvc{}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		body := `{"sender_id":1,"content":"Edit"}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/messages/abc", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing sender_id", func(t *testing.T) {
+		svc := &mockMsgSvc{}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		body := `{"content":"Edit"}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/messages/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing content", func(t *testing.T) {
+		svc := &mockMsgSvc{}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		body := `{"sender_id":1}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/messages/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("service validation error", func(t *testing.T) {
+		svc := &mockMsgSvc{
+			editMessageFn: func(mid, sid uint, content string) error {
+				return assert.AnError
+			},
+		}
+		r := setupMessageRoutes(svc, &mockFileSvc{})
+
+		body := `{"sender_id":1,"content":"Edit"}`
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/messages/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 

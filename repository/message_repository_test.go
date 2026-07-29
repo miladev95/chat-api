@@ -252,6 +252,153 @@ func TestMessageRepository_DeleteMessage(t *testing.T) {
 	})
 }
 
+func TestMessageRepository_GetMessageByID(t *testing.T) {
+	db := setupTestDB()
+	userRepo := NewUserRepository(db)
+	msgRepo := NewMessageRepository(db)
+
+	user := &models.User{Username: "msg_user", Email: "msg@test.com"}
+	assert.NoError(t, userRepo.CreateUser(user))
+
+	msg := &models.Message{
+		SenderID:   user.ID,
+		ReceiverID: uintPtr(user.ID),
+		Type:       models.MessageTypeText,
+		Content:    "Find me",
+	}
+	assert.NoError(t, msgRepo.CreateMessage(msg))
+
+	t.Run("returns message when exists", func(t *testing.T) {
+		found, err := msgRepo.GetMessageByID(msg.ID)
+		assert.NoError(t, err)
+		assert.NotNil(t, found)
+		assert.Equal(t, msg.ID, found.ID)
+		assert.Equal(t, "Find me", found.Content)
+	})
+
+	t.Run("returns error when message does not exist", func(t *testing.T) {
+		found, err := msgRepo.GetMessageByID(9999)
+		assert.Error(t, err)
+		assert.Nil(t, found)
+	})
+}
+
+func TestMessageRepository_UpdateMessageContent(t *testing.T) {
+	db := setupTestDB()
+	userRepo := NewUserRepository(db)
+	msgRepo := NewMessageRepository(db)
+
+	user := &models.User{Username: "editor", Email: "editor@test.com"}
+	assert.NoError(t, userRepo.CreateUser(user))
+
+	msg := &models.Message{
+		SenderID:   user.ID,
+		ReceiverID: uintPtr(user.ID),
+		Type:       models.MessageTypeText,
+		Content:    "Original content",
+	}
+	assert.NoError(t, msgRepo.CreateMessage(msg))
+
+	t.Run("updates message content", func(t *testing.T) {
+		err := msgRepo.UpdateMessageContent(msg.ID, "Updated content")
+		assert.NoError(t, err)
+
+		updated, err := msgRepo.GetMessageByID(msg.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, "Updated content", updated.Content)
+	})
+
+	t.Run("updating non-existent message does not error", func(t *testing.T) {
+		err := msgRepo.UpdateMessageContent(9999, "Ghost")
+		assert.NoError(t, err)
+	})
+}
+
+func TestMessageRepository_GetConversations(t *testing.T) {
+	db := setupTestDB()
+	userRepo := NewUserRepository(db)
+	msgRepo := NewMessageRepository(db)
+
+	alice := &models.User{Username: "alice", Email: "alice@test.com"}
+	bob := &models.User{Username: "bob", Email: "bob@test.com"}
+	carol := &models.User{Username: "carol", Email: "carol@test.com"}
+	assert.NoError(t, userRepo.CreateUser(alice))
+	assert.NoError(t, userRepo.CreateUser(bob))
+	assert.NoError(t, userRepo.CreateUser(carol))
+
+	t.Run("returns empty slice when no conversations", func(t *testing.T) {
+		convs, err := msgRepo.GetConversations(alice.ID)
+		assert.NoError(t, err)
+		assert.Empty(t, convs)
+	})
+
+	t.Run("returns conversations with last message and unseen count", func(t *testing.T) {
+		// Alice sends 2 messages to Bob
+		for i := 0; i < 2; i++ {
+			msg := &models.Message{
+				SenderID:   alice.ID,
+				ReceiverID: uintPtr(bob.ID),
+				Type:       models.MessageTypeText,
+				Content:    "Hey Bob",
+			}
+			assert.NoError(t, msgRepo.CreateMessage(msg))
+		}
+
+		// Bob sends 1 message to Alice
+		msg := &models.Message{
+			SenderID:   bob.ID,
+			ReceiverID: uintPtr(alice.ID),
+			Type:       models.MessageTypeText,
+			Content:    "Hey Alice!",
+		}
+		assert.NoError(t, msgRepo.CreateMessage(msg))
+
+		// Get Alice's conversations — should see Bob with 1 unseen (Bob's msg) and 0 unseen for Alice's own msgs
+		convs, err := msgRepo.GetConversations(alice.ID)
+		assert.NoError(t, err)
+		assert.Len(t, convs, 1)
+		assert.Equal(t, bob.ID, convs[0].UserID)
+		assert.Equal(t, "bob", convs[0].Username)
+		assert.Equal(t, int64(1), convs[0].UnseenCount) // Bob's message to Alice is unseen
+		assert.Equal(t, "Hey Alice!", convs[0].LastMessage.Content)
+	})
+
+	t.Run("returns conversations sorted by most recent message", func(t *testing.T) {
+		// Bob sends a message to Carol
+		msg := &models.Message{
+			SenderID:   bob.ID,
+			ReceiverID: uintPtr(carol.ID),
+			Type:       models.MessageTypeText,
+			Content:    "Hi Carol",
+		}
+		assert.NoError(t, msgRepo.CreateMessage(msg))
+
+		// Get Bob's conversations — should have Alice and Carol, most recent first (Carol since Bob just messaged her)
+		convs, err := msgRepo.GetConversations(bob.ID)
+		assert.NoError(t, err)
+		assert.Len(t, convs, 2)
+
+		// Most recent should be Carol (Bob's last message was to Carol)
+		assert.Equal(t, carol.ID, convs[0].UserID)
+		assert.Equal(t, alice.ID, convs[1].UserID)
+	})
+
+	t.Run("excludes soft-deleted messages from conversations", func(t *testing.T) {
+		// Delete all messages between Alice and Bob
+		var msgs []models.Message
+		db.Where("sender_id = ? AND receiver_id = ?", alice.ID, bob.ID).Find(&msgs)
+		for _, m := range msgs {
+			assert.NoError(t, msgRepo.DeleteMessage(m.ID))
+		}
+		db.Where("sender_id = ? AND receiver_id = ?", bob.ID, alice.ID).Delete(&models.Message{})
+
+		// Alice should have no conversations now (all messages deleted)
+		convs, err := msgRepo.GetConversations(alice.ID)
+		assert.NoError(t, err)
+		assert.Empty(t, convs)
+	})
+}
+
 func TestMessageRepository_GetUnseenCountDetailed(t *testing.T) {
 	db := setupTestDB()
 	userRepo := NewUserRepository(db)

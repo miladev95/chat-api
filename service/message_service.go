@@ -11,6 +11,8 @@ import (
 type MessageService interface {
 	SendMessage(msg *models.Message) error
 	GetConversation(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
+	GetConversations(userID uint) ([]repository.ConversationItem, error)
+	EditMessage(messageID, senderID uint, content string) error
 	MarkSeen(messageID, userID uint) error
 	DeleteMessage(messageID uint) error
 	GetUnseenCount(userID uint) (map[string]interface{}, error)
@@ -47,6 +49,25 @@ func (s *messageService) SendMessage(msg *models.Message) error {
 // GetConversation fetches paginated messages for either a direct or group chat.
 func (s *messageService) GetConversation(receiverID, groupID *uint, limit, offset int) ([]models.Message, error) {
 	return s.msgRepo.GetMessagesByConversation(receiverID, groupID, limit, offset)
+}
+
+func (s *messageService) GetConversations(userID uint) ([]repository.ConversationItem, error) {
+	return s.msgRepo.GetConversations(userID)
+}
+
+func (s *messageService) EditMessage(messageID, senderID uint, content string) error {
+	if content == "" {
+		return errors.New("content cannot be empty")
+	}
+	// Verify the message exists and belongs to the sender
+	msg, err := s.msgRepo.GetMessageByID(messageID)
+	if err != nil {
+		return errors.New("message not found")
+	}
+	if msg.SenderID != senderID {
+		return errors.New("you can only edit your own messages")
+	}
+	return s.msgRepo.UpdateMessageContent(messageID, content)
 }
 
 // MarkSeen sets the seen flag for a user on a specific message.

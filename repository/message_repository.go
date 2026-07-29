@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"sort"
 	"time"
 
 	"gorm.io/gorm"
@@ -9,9 +10,20 @@ import (
 	"chat/models"
 )
 
+// ConversationItem represents a single conversation entry for the conversation list.
+type ConversationItem struct {
+	UserID      uint            `json:"user_id"`
+	Username    string          `json:"username"`
+	LastMessage *models.Message `json:"last_message"`
+	UnseenCount int64           `json:"unseen_count"`
+}
+
 type MessageRepository interface {
 	CreateMessage(msg *models.Message) error
+	GetMessageByID(messageID uint) (*models.Message, error)
 	GetMessagesByConversation(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
+	GetConversations(userID uint) ([]ConversationItem, error)
+	UpdateMessageContent(messageID uint, content string) error
 	MarkMessageSeen(messageID, userID uint) error
 	DeleteMessage(messageID uint) error
 	GetUnseenCountDetailed(userID uint) (map[string]interface{}, error)
@@ -58,6 +70,80 @@ func (r *messageRepo) MarkMessageSeen(messageID, userID uint) error {
 		Columns:   []clause.Column{{Name: "message_id"}, {Name: "user_id"}},
 		UpdateAll: true,
 	}).Create(&seen).Error
+}
+
+func (r *messageRepo) GetConversations(userID uint) ([]ConversationItem, error) {
+	// Find all distinct user IDs this user has exchanged direct messages with
+	type partnerRow struct {
+		UserID uint
+	}
+	var partners []partnerRow
+	if err := r.db.Raw(`
+		SELECT DISTINCT CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END as user_id
+		FROM messages
+		WHERE (sender_id = ? OR receiver_id = ?) AND group_id IS NULL AND deleted_at IS NULL
+	`, userID, userID, userID).Scan(&partners).Error; err != nil {
+		return nil, err
+	}
+
+	var conversations []ConversationItem
+	for _, p := range partners {
+		if p.UserID == 0 {
+			continue
+		}
+
+		var username string
+		r.db.Model(&models.User{}).Select("username").Where("id = ?", p.UserID).Scan(&username)
+
+		// Get the latest message in this conversation
+		var lastMsg models.Message
+		if err := r.db.Where(
+			"((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) AND group_id IS NULL",
+			userID, p.UserID, p.UserID, userID,
+		).Order("created_at DESC").First(&lastMsg).Error; err != nil {
+			// If no messages (e.g., deleted), skip this conversation
+			if err == gorm.ErrRecordNotFound {
+				continue
+			}
+			return nil, err
+		}
+
+		// Count unseen messages from this conversation partner
+		var unseenCount int64
+		r.db.Model(&models.Message{}).
+			Where("sender_id = ? AND receiver_id = ? AND deleted_at IS NULL", p.UserID, userID).
+			Where("id NOT IN (SELECT message_id FROM seens WHERE user_id = ?)", userID).
+			Count(&unseenCount)
+
+		conversations = append(conversations, ConversationItem{
+			UserID:      p.UserID,
+			Username:    username,
+			LastMessage: &lastMsg,
+			UnseenCount: unseenCount,
+		})
+	}
+
+	// Sort by last message time, most recent first
+	sort.Slice(conversations, func(i, j int) bool {
+		return conversations[i].LastMessage.CreatedAt.After(conversations[j].LastMessage.CreatedAt)
+	})
+
+	if conversations == nil {
+		return []ConversationItem{}, nil
+	}
+	return conversations, nil
+}
+
+func (r *messageRepo) UpdateMessageContent(messageID uint, content string) error {
+	return r.db.Model(&models.Message{}).Where("id = ?", messageID).Update("content", content).Error
+}
+
+func (r *messageRepo) GetMessageByID(messageID uint) (*models.Message, error) {
+	var msg models.Message
+	if err := r.db.First(&msg, messageID).Error; err != nil {
+		return nil, err
+	}
+	return &msg, nil
 }
 
 // Soft delete a message by ID

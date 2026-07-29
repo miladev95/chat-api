@@ -4,6 +4,7 @@ import (
 	"mime/multipart"
 
 	"chat/models"
+	"chat/repository"
 	"chat/service"
 )
 
@@ -56,11 +57,13 @@ func (m *mockGroupSvc) LeaveGroup(groupID, userID uint) error                   
 // --- MessageService mock ---
 
 type mockMsgSvc struct {
-	sendMessageFn     func(msg *models.Message) error
-	getConversationFn func(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
-	markSeenFn        func(messageID, userID uint) error
-	deleteMessageFn   func(messageID uint) error
-	getUnseenCountFn  func(userID uint) (map[string]interface{}, error)
+	sendMessageFn      func(msg *models.Message) error
+	getConversationFn  func(receiverID, groupID *uint, limit, offset int) ([]models.Message, error)
+	getConversationsFn func(userID uint) ([]repository.ConversationItem, error)
+	editMessageFn      func(messageID, senderID uint, content string) error
+	markSeenFn         func(messageID, userID uint) error
+	deleteMessageFn    func(messageID uint) error
+	getUnseenCountFn   func(userID uint) (map[string]interface{}, error)
 }
 
 // --- FileService mock ---
@@ -77,6 +80,8 @@ func (m *mockMsgSvc) SendMessage(msg *models.Message) error                     
 func (m *mockMsgSvc) GetConversation(receiverID, groupID *uint, limit, offset int) ([]models.Message, error) {
 	return m.getConversationFn(receiverID, groupID, limit, offset)
 }
+func (m *mockMsgSvc) GetConversations(userID uint) ([]repository.ConversationItem, error) { return m.getConversationsFn(userID) }
+func (m *mockMsgSvc) EditMessage(messageID, senderID uint, content string) error { return m.editMessageFn(messageID, senderID, content) }
 func (m *mockMsgSvc) MarkSeen(messageID, userID uint) error                       { return m.markSeenFn(messageID, userID) }
 func (m *mockMsgSvc) DeleteMessage(messageID uint) error                         { return m.deleteMessageFn(messageID) }
 func (m *mockMsgSvc) GetUnseenCount(userID uint) (map[string]interface{}, error) { return m.getUnseenCountFn(userID) }

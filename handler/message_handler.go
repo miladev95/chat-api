@@ -220,6 +220,45 @@ func (h *MessageHandler) SendFileMessage(c *gin.Context) {
 	c.JSON(http.StatusCreated, msg)
 }
 
+// GET /conversations?user_id=
+func (h *MessageHandler) GetConversations(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Query("user_id"))
+	if err != nil || userID < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required and must be a positive number"})
+		return
+	}
+
+	conversations, err := h.msgService.GetConversations(uint(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, conversations)
+}
+
+// PUT /messages/:id
+func (h *MessageHandler) EditMessage(c *gin.Context) {
+	messageID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message id"})
+		return
+	}
+	var req struct {
+		SenderID uint   `json:"sender_id" binding:"required"`
+		Content  string `json:"content" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.msgService.EditMessage(uint(messageID), req.SenderID, req.Content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "message updated"})
+}
+
 // DELETE /messages/:id
 func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 	messageID, err := strconv.Atoi(c.Param("id"))

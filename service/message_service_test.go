@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"chat/models"
+	"chat/repository"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -201,6 +202,97 @@ func TestMessageService_DeleteMessage(t *testing.T) {
 
 		err := svc.DeleteMessage(1)
 		assert.Error(t, err)
+	})
+}
+
+func TestMessageService_GetConversations(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		expected := []repository.ConversationItem{
+			{UserID: 2, Username: "bob", UnseenCount: 3},
+			{UserID: 3, Username: "carol", UnseenCount: 1},
+		}
+		msgRepo := &mockMessageRepo{
+			getConversationsFn: func(uid uint) ([]repository.ConversationItem, error) {
+				return expected, nil
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		convs, err := svc.GetConversations(1)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, convs)
+	})
+
+	t.Run("repo error", func(t *testing.T) {
+		msgRepo := &mockMessageRepo{
+			getConversationsFn: func(uid uint) ([]repository.ConversationItem, error) {
+				return nil, errors.New("db error")
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		convs, err := svc.GetConversations(1)
+		assert.Error(t, err)
+		assert.Nil(t, convs)
+	})
+}
+
+func TestMessageService_EditMessage(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var capturedContent string
+		msgRepo := &mockMessageRepo{
+			getMessageByIDFn: func(mid uint) (*models.Message, error) {
+				return &models.Message{ID: 1, SenderID: 5, Content: "Original"}, nil
+			},
+			updateMessageContentFn: func(mid uint, content string) error {
+				capturedContent = content
+				return nil
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		err := svc.EditMessage(1, 5, "Updated content")
+		assert.NoError(t, err)
+		assert.Equal(t, "Updated content", capturedContent)
+	})
+
+	t.Run("empty content rejected", func(t *testing.T) {
+		msgRepo := &mockMessageRepo{
+			getMessageByIDFn: func(mid uint) (*models.Message, error) {
+				return &models.Message{ID: 1, SenderID: 5}, nil
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		err := svc.EditMessage(1, 5, "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "content cannot be empty")
+	})
+
+	t.Run("message not found", func(t *testing.T) {
+		msgRepo := &mockMessageRepo{
+			getMessageByIDFn: func(mid uint) (*models.Message, error) {
+				return nil, errors.New("not found")
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		err := svc.EditMessage(999, 5, "new content")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "message not found")
+	})
+
+	t.Run("cannot edit other user's message", func(t *testing.T) {
+		msgRepo := &mockMessageRepo{
+			getMessageByIDFn: func(mid uint) (*models.Message, error) {
+				return &models.Message{ID: 1, SenderID: 5, Content: "Original"}, nil
+			},
+		}
+		svc := NewMessageService(msgRepo, &mockGroupRepo{})
+
+		err := svc.EditMessage(1, 99, "hacked content")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "only edit your own messages")
 	})
 }
 

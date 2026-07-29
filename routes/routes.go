@@ -68,10 +68,14 @@ func SetupRouter(
 		messageRoutes.POST("", messageHandler.SendMessage)
 		messageRoutes.POST("/upload", messageHandler.SendFileMessage)
 		messageRoutes.GET("", messageHandler.GetConversation)
+		messageRoutes.PUT("/:id", messageHandler.EditMessage)
 		messageRoutes.POST("/:id/seen", messageHandler.MarkSeen)
 		messageRoutes.DELETE("/:id", messageHandler.DeleteMessage)
 		messageRoutes.GET("/unseen/:user_id", messageHandler.GetUnseenCount)
 	}
+
+	// Conversations route
+	r.GET("/conversations", globalLimiter, messageHandler.GetConversations)
 
 	// Upload route — stricter limit (10 req/min)
 	r.POST("/upload", uploadLimiter, fileHandler.Upload)
