@@ -63,7 +63,6 @@ chat/
 ├── main.go                      # Entry point — wires dependencies, starts server
 ├── go.mod                       # Module: "chat", Go 1.22, PostgreSQL + SQLite drivers
 ├── go.sum                       # Dependency checksums
-├── AGENT.md                     # This file — AI agent guide
 ├── README.md                    # Full documentation
 ├── postman_collection.json      # Postman collection for testing
 ├── .golangci.yml                # Lint configuration
@@ -441,16 +440,3 @@ services:
 - **File uploads** go to `./uploads/` directory (served statically at `/uploads/*`).
 
 ---
-
-## 📜 Git History
-
-The project has 4 uncommitted branches worth of changes from the initial state:
-
-| Commit | Description |
-|---|---|
-| `030c3e4` | Add repository layer unit tests (user, group, message) |
-| `2e17b90` | Phase 1: Service tests, handler tests, lint config, error fixes |
-| `7b07ea1` | Phase 2: Authorization checks and file upload endpoint |
-| `48d62c5` | Switch database from SQLite to PostgreSQL |
-| `0ac35b1` | Add Docker setup with multi-stage build and docker-compose |
-| `cf524fd` | Add combined file upload + message sending endpoint |
