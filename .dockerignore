@@ -1,0 +1,9 @@
+.git/
+.gitignore
+AGENT.md
+README.md
+postman_collection.json
+*.db
+docker-compose.yml
+.DS_Store
+.idea/
