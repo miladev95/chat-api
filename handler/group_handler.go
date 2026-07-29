@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"chat/models"
 	"chat/service"
 )
 
@@ -60,6 +61,13 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "group deleted"})
 }
 
+// validRoles contains the allowed group member role values.
+var validRoles = map[string]bool{
+	models.RoleOwner:  true,
+	models.RoleAdmin:  true,
+	models.RoleMember: true,
+}
+
 // POST /groups/:id/members
 func (h *GroupHandler) AddMember(c *gin.Context) {
 	groupID, err := strconv.Atoi(c.Param("id"))
@@ -76,6 +84,13 @@ func (h *GroupHandler) AddMember(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Validate role if provided
+	if req.Role != "" && !validRoles[req.Role] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be owner, admin, or member"})
+		return
+	}
+
 	if err := h.groupService.AddMember(uint(groupID), req.UserID, req.Role, req.RequesterID); err != nil {
 		code := http.StatusInternalServerError
 		if err == service.ErrNotMember || err == service.ErrInsufficientRole || err == service.ErrNotOwner {

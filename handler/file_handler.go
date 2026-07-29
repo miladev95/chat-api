@@ -8,6 +8,9 @@ import (
 	"chat/service"
 )
 
+// MaxUploadSize defines the maximum allowed file size (50 MB).
+const MaxUploadSize = 50 << 20
+
 // FileHandler exposes HTTP handlers for file upload operations.
 type FileHandler struct {
 	fileService service.FileService
@@ -20,9 +23,12 @@ func NewFileHandler(fileService service.FileService) *FileHandler {
 
 // POST /upload
 func (h *FileHandler) Upload(c *gin.Context) {
+	// Limit request body size to prevent large uploads
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxUploadSize)
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required or exceeds maximum size"})
 		return
 	}
 	defer file.Close()

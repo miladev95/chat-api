@@ -21,6 +21,14 @@ func NewMessageHandler(msgService service.MessageService, fileService service.Fi
 }
 
 // POST /messages
+// validMessageTypes contains the allowed message type values.
+var validMessageTypes = map[string]bool{
+	string(models.MessageTypeText):  true,
+	string(models.MessageTypeImage): true,
+	string(models.MessageTypeFile):  true,
+}
+
+// POST /messages
 func (h *MessageHandler) SendMessage(c *gin.Context) {
 	var req struct {
 		SenderID   uint   `json:"sender_id" binding:"required"`
@@ -32,6 +40,24 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate message type is one of the allowed values
+	if !validMessageTypes[req.Type] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message type: must be text, image, or file"})
+		return
+	}
+
+	// For text messages, content is required
+	if req.Type == string(models.MessageTypeText) && req.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content is required for text messages"})
+		return
+	}
+
+	// For image/file messages, file_id is required
+	if req.Type != string(models.MessageTypeText) && req.FileID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file_id is required for image and file messages"})
 		return
 	}
 
@@ -54,19 +80,40 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 func (h *MessageHandler) GetConversation(c *gin.Context) {
 	receiverIDStr := c.Query("receiver_id")
 	groupIDStr := c.Query("group_id")
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
 	var receiverID, groupID *uint
 	if receiverIDStr != "" {
-		id, _ := strconv.Atoi(receiverIDStr)
+		id, err := strconv.Atoi(receiverIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid receiver_id"})
+			return
+		}
 		tmp := uint(id)
 		receiverID = &tmp
 	}
 	if groupIDStr != "" {
-		id, _ := strconv.Atoi(groupIDStr)
+		id, err := strconv.Atoi(groupIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group_id"})
+			return
+		}
 		tmp := uint(id)
 		groupID = &tmp
+	}
+
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if err != nil || limit < 1 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	// Validate at least one conversation target was provided
+	if receiverID == nil && groupID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either receiver_id or group_id is required"})
+		return
 	}
 
 	msgs, err := h.msgService.GetConversation(receiverID, groupID, limit, offset)
@@ -122,19 +169,31 @@ func (h *MessageHandler) SendFileMessage(c *gin.Context) {
 		return
 	}
 
-	// Parse optional conversation targets
+	// Parse conversation targets
 	var receiverID, groupID *uint
 	if rid := c.PostForm("receiver_id"); rid != "" {
-		if id, err := strconv.Atoi(rid); err == nil {
-			tmp := uint(id)
-			receiverID = &tmp
+		id, err := strconv.Atoi(rid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid receiver_id"})
+			return
 		}
+		tmp := uint(id)
+		receiverID = &tmp
 	}
 	if gid := c.PostForm("group_id"); gid != "" {
-		if id, err := strconv.Atoi(gid); err == nil {
-			tmp := uint(id)
-			groupID = &tmp
+		id, err := strconv.Atoi(gid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group_id"})
+			return
 		}
+		tmp := uint(id)
+		groupID = &tmp
+	}
+
+	// Validate at least one conversation target
+	if receiverID == nil && groupID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either receiver_id or group_id is required"})
+		return
 	}
 
 	// Determine message type based on content type
