@@ -64,8 +64,32 @@
     },
     {
       "name": "Groups",
-      "description": "Group management with role-based authorization. All mutating endpoints require `requester_id` to identify who is performing the action.\n\nRoles: owner, admin, member.\n- Only owners can delete groups and assign owner/admin roles.\n- Owners and admins can add/remove members.\n- Nobody can remove the owner.",
+      "description": "Group management with role-based authorization. All mutating endpoints require `requester_id` to identify who is performing the action.\n\nRoles: owner, admin, member.\n- Only owners can delete groups, update group names, assign owner/admin roles.\n- Owners and admins can add/remove members and update member roles.\n- Nobody can remove or change the owner's role.\n- Owners cannot leave without transferring ownership first.",
       "item": [
+        {
+          "name": "List All Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/groups",
+              "host": ["{{base_url}}"],
+              "path": ["groups"]
+            }
+          }
+        },
+        {
+          "name": "Get Group by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/groups/1",
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1"]
+            }
+          }
+        },
         {
           "name": "Create Group",
           "request": {
@@ -79,6 +103,39 @@
               "raw": "{{base_url}}/groups",
               "host": ["{{base_url}}"],
               "path": ["groups"]
+            }
+          }
+        },
+        {
+          "name": "Update Group Name",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renamed Team\",\n  \"requester_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/groups/1",
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1"]
+            },
+            "description": "Update the group name. Only the group owner can perform this action."
+          }
+        },
+        {
+          "name": "Delete Group",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requester_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/groups/1",
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1"]
             }
           }
         },
@@ -99,15 +156,20 @@
           }
         },
         {
-          "name": "Get Group Members",
+          "name": "Update Member Role",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\",\n  \"requester_id\": 1\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/groups/1/members",
+              "raw": "{{base_url}}/groups/1/members/2",
               "host": ["{{base_url}}"],
-              "path": ["groups", "1", "members"]
-            }
+              "path": ["groups", "1", "members", "2"]
+            },
+            "description": "Update a member's role. Owners and admins can perform this action. Cannot change the owner's role. Only the owner can assign the owner role."
           }
         },
         {
@@ -127,19 +189,32 @@
           }
         },
         {
-          "name": "Delete Group",
+          "name": "Get Group Members",
           "request": {
-            "method": "DELETE",
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/groups/1/members",
+              "host": ["{{base_url}}"],
+              "path": ["groups", "1", "members"]
+            }
+          }
+        },
+        {
+          "name": "Leave Group",
+          "request": {
+            "method": "POST",
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requester_id\": 1\n}"
+              "raw": "{\n  \"user_id\": 2\n}"
             },
             "url": {
-              "raw": "{{base_url}}/groups/1",
+              "raw": "{{base_url}}/groups/1/leave",
               "host": ["{{base_url}}"],
-              "path": ["groups", "1"]
-            }
+              "path": ["groups", "1", "leave"]
+            },
+            "description": "Leave a group. The group owner cannot leave — they must transfer ownership first or delete the group."
           }
         }
       ]
