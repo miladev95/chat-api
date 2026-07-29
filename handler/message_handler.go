@@ -77,7 +77,11 @@ func (h *MessageHandler) GetConversation(c *gin.Context) {
 
 // POST /messages/:id/seen
 func (h *MessageHandler) MarkSeen(c *gin.Context) {
-	messageID, _ := strconv.Atoi(c.Param("id"))
+	messageID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message id"})
+		return
+	}
 	var req struct {
 		UserID uint `json:"user_id" binding:"required"`
 	}
@@ -94,7 +98,11 @@ func (h *MessageHandler) MarkSeen(c *gin.Context) {
 
 // DELETE /messages/:id
 func (h *MessageHandler) DeleteMessage(c *gin.Context) {
-	messageID, _ := strconv.Atoi(c.Param("id"))
+	messageID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message id"})
+		return
+	}
 	if err := h.msgService.DeleteMessage(uint(messageID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

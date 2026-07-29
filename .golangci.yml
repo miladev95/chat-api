@@ -1,0 +1,44 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Report suspicious constructs
+    - ineffassign    # Detect ineffective assignments
+    - staticcheck    # Static analysis
+    - typecheck      # Type-check the code
+    - unused         # Detect unused constants, variables, functions
+    - bodyclose      # Ensure HTTP response bodies are closed
+    - dupl           # Detect duplicate code
+    - goconst        # Find repeated strings that could be constants
+    - gofmt          # Check code formatting
+    - goimports      # Check import ordering
+    - misspell       # Fix common misspellings
+    - nilerr         # Detect returning nil when error is not nil
+    - prealloc       # Find slices that could be preallocated
+    - unconvert      # Remove unnecessary type conversions
+    - unparam        # Report unused function parameters
+
+linters-settings:
+  gofmt:
+    simplify: true
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - dupl
+        - goconst
+        - bodyclose

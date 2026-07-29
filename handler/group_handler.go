@@ -37,7 +37,11 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 
 // DELETE /groups/:id
 func (h *GroupHandler) DeleteGroup(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
+		return
+	}
 	if err := h.groupService.DeleteGroup(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -47,7 +51,11 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 
 // POST /groups/:id/members
 func (h *GroupHandler) AddMember(c *gin.Context) {
-	groupID, _ := strconv.Atoi(c.Param("id"))
+	groupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
+		return
+	}
 	var req struct {
 		UserID uint   `json:"user_id" binding:"required"`
 		Role   string `json:"role"`
@@ -68,8 +76,16 @@ func (h *GroupHandler) AddMember(c *gin.Context) {
 
 // DELETE /groups/:id/members/:user_id
 func (h *GroupHandler) RemoveMember(c *gin.Context) {
-	groupID, _ := strconv.Atoi(c.Param("id"))
-	userID, _ := strconv.Atoi(c.Param("user_id"))
+	groupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
+		return
+	}
+	userID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 	if err := h.groupService.RemoveMember(uint(groupID), uint(userID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -79,7 +95,11 @@ func (h *GroupHandler) RemoveMember(c *gin.Context) {
 
 // GET /groups/:id/members
 func (h *GroupHandler) GetMembers(c *gin.Context) {
-	groupID, _ := strconv.Atoi(c.Param("id"))
+	groupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
+		return
+	}
 	members, err := h.groupService.GetMembers(uint(groupID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
