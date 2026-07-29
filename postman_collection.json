@@ -309,6 +309,39 @@
           }
         },
         {
+          "name": "Get Conversations List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/conversations?user_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"],
+              "query": [
+                {"key": "user_id", "value": "1"}
+              ]
+            },
+            "description": "List all conversations for a user, with the latest message and unseen count per conversation.\n\nResponse:\n[\n  {\n    \"user_id\": 2,\n    \"username\": \"bob\",\n    \"last_message\": { \"id\": 10, \"content\": \"Hey!\", \"type\": \"text\", ... },\n    \"unseen_count\": 3\n  }\n]"
+          }
+        },
+        {
+          "name": "Edit Message",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sender_id\": 1,\n  \"content\": \"Updated message content\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/messages/1",
+              "host": ["{{base_url}}"],
+              "path": ["messages", "1"]
+            },
+            "description": "Edit a message. You can only edit your own messages. Returns 400 if the message is not found, content is empty, or you don't own the message."
+          }
+        },
+        {
           "name": "Get Conversation (Direct)",
           "request": {
             "method": "GET",
